@@ -122,8 +122,9 @@ const summaryEl = document.getElementById("summary");
 const warningEl = document.getElementById("warning");
 const branchElements = {};
 
-// LocalStorage key for caching settings
+// LocalStorage keys
 const STORAGE_KEY = "stacking-calc-settings";
+const CHECKED_UNITS_KEY = "stacking-calc-checked-units";
 
 // Load settings from localStorage
 function loadSettings() {
@@ -159,6 +160,29 @@ function saveSettings() {
     console.warn("Failed to save settings to localStorage:", e);
   }
 }
+
+// Load checked units from localStorage
+function loadCheckedUnits() {
+  try {
+    const saved = localStorage.getItem(CHECKED_UNITS_KEY);
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  } catch (e) {
+    console.warn("Failed to load checked units from localStorage:", e);
+    return new Set();
+  }
+}
+
+// Save checked units to localStorage
+function saveCheckedUnits(checkedUnits) {
+  try {
+    localStorage.setItem(CHECKED_UNITS_KEY, JSON.stringify(Array.from(checkedUnits)));
+  } catch (e) {
+    console.warn("Failed to save checked units to localStorage:", e);
+  }
+}
+
+// Track which units have been added to army
+let checkedUnits = loadCheckedUnits();
 
 function getBranchUnlockedTiers(entry) {
   const maxTier = Number(entry.select.value);
@@ -658,7 +682,17 @@ function updateResults() {
     
     const tr = document.createElement("tr");
     tr.className = `tier-${unitTier}-row`;
+    const unitKey = `${row.id}-${row.assignedUnits}`;
+    const isChecked = checkedUnits.has(unitKey);
+    
+    if (isChecked) {
+      tr.classList.add('checked-row');
+    }
+    
     tr.innerHTML = `
+      <td class="check-cell">
+        <input type="checkbox" class="unit-checkbox" data-unit-key="${unitKey}" ${isChecked ? 'checked' : ''}>
+      </td>
       <td><strong>${baseId}</strong></td>
       <td><span class="role-badge role-${row.role}">${row.role}</span></td>
       <td>${formatNumber(row.assignedUnits)}</td>
@@ -667,6 +701,30 @@ function updateResults() {
       <td>${formatPercent(row.healthShare)}</td>
       <td>${row.notes}</td>
     `;
+    
+    // Add click handler for checkbox
+    const checkbox = tr.querySelector('.unit-checkbox');
+    checkbox.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const key = checkbox.dataset.unitKey;
+      if (checkbox.checked) {
+        checkedUnits.add(key);
+        tr.classList.add('checked-row');
+      } else {
+        checkedUnits.delete(key);
+        tr.classList.remove('checked-row');
+      }
+      saveCheckedUnits(checkedUnits);
+    });
+    
+    // Allow clicking anywhere on row to toggle checkbox
+    tr.addEventListener('click', (e) => {
+      if (e.target.type !== 'checkbox') {
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event('change'));
+      }
+    });
+    
     resultTableBody.append(tr);
   });
 
@@ -697,6 +755,14 @@ function initEvents() {
   targetHealthInput.addEventListener("input", () => {
     updateResults();
     saveSettings();
+  });
+  
+  // Clear checked units button
+  const clearCheckedBtn = document.getElementById("clear-checked-btn");
+  clearCheckedBtn.addEventListener("click", () => {
+    checkedUnits.clear();
+    saveCheckedUnits(checkedUnits);
+    updateResults();
   });
 }
 

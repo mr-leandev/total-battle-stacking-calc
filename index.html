@@ -49,13 +49,15 @@
     <section class="results card">
       <div class="section-header">
         <h2>Hero Stack Recommendation</h2>
-        <div class="summary" id="summary"></div>
+        <button id="clear-checked-btn" class="clear-checked-btn" title="Clear all checkmarks">Clear Checked</button>
       </div>
+      <div class="summary" id="summary"></div>
       <div id="warning" class="warning hidden"></div>
       <div class="table-wrapper">
         <table id="result-table">
           <thead>
             <tr>
+              <th class="check-column">✓</th>
               <th>Unit</th>
               <th>Role</th>
               <th>Units</th>
