@@ -23,7 +23,9 @@ A powerful, interactive calculator for optimizing troop stacks in Total Battle. 
 
 ## Live Demo
 
-Visit the calculator: [GitHub Pages URL will be here]
+🎮 **[Launch Calculator](https://mr-leandev.github.io/total-battle-stacking-calc/)**
+
+Visit: https://mr-leandev.github.io/total-battle-stacking-calc/
 
 ## Local Development
 
