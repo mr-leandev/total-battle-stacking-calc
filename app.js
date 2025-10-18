@@ -10,16 +10,12 @@ const TROOPS = [
   { id: "S2-ML", name: "Specialist 2 Melee", tier: 2, branch: "Specialists", role: "melee", strength: 90, health: 270, leadership: 1 },
   { id: "S1-ML", name: "Specialist 1 Melee", tier: 1, branch: "Specialists", role: "melee", strength: 50, health: 150, leadership: 1 },
   
-  // Specialists - Ranged
+  // Specialists - Ranged (available tier 5+)
   { id: "S9", name: "Specialist 9", tier: 9, branch: "Specialists", role: "ranged", strength: 5510, health: 16530, leadership: 1 },
   { id: "S8", name: "Specialist 8", tier: 8, branch: "Specialists", role: "ranged", strength: 3060, health: 9180, leadership: 1 },
   { id: "S7", name: "Specialist 7", tier: 7, branch: "Specialists", role: "ranged", strength: 1700, health: 5100, leadership: 1 },
   { id: "S6", name: "Specialist 6", tier: 6, branch: "Specialists", role: "ranged", strength: 940, health: 2820, leadership: 1 },
   { id: "S5", name: "Specialist 5", tier: 5, branch: "Specialists", role: "ranged", strength: 520, health: 1560, leadership: 1 },
-  { id: "S4", name: "Specialist 4", tier: 4, branch: "Specialists", role: "ranged", strength: 290, health: 870, leadership: 1 },
-  { id: "S3", name: "Specialist 3", tier: 3, branch: "Specialists", role: "ranged", strength: 160, health: 480, leadership: 1 },
-  { id: "S2", name: "Specialist 2", tier: 2, branch: "Specialists", role: "ranged", strength: 90, health: 270, leadership: 1 },
-  { id: "S1", name: "Specialist 1", tier: 1, branch: "Specialists", role: "ranged", strength: 50, health: 150, leadership: 1 },
   
   // Specialists - Flying (available tier 5+, leadership 1, same health as ranged since leadership is 1)
   { id: "S9-F", name: "Specialist 9 Flying", tier: 9, branch: "Specialists", role: "flying", strength: 5510, health: 16530, leadership: 1 },
@@ -28,16 +24,12 @@ const TROOPS = [
   { id: "S6-F", name: "Specialist 6 Flying", tier: 6, branch: "Specialists", role: "flying", strength: 940, health: 2820, leadership: 1 },
   { id: "S5-F", name: "Specialist 5 Flying", tier: 5, branch: "Specialists", role: "flying", strength: 520, health: 1560, leadership: 1 },
   
-  // Specialists - Mounted (leadership 2, health x2)
+  // Specialists - Mounted (leadership 2, health x2, available tier 5+)
   { id: "S9-M", name: "Specialist 9 Mounted", tier: 9, branch: "Specialists", role: "mounted", strength: 5510, health: 33060, leadership: 2 },
   { id: "S8-M", name: "Specialist 8 Mounted", tier: 8, branch: "Specialists", role: "mounted", strength: 3060, health: 18360, leadership: 2 },
   { id: "S7-M", name: "Specialist 7 Mounted", tier: 7, branch: "Specialists", role: "mounted", strength: 1700, health: 10200, leadership: 2 },
   { id: "S6-M", name: "Specialist 6 Mounted", tier: 6, branch: "Specialists", role: "mounted", strength: 940, health: 5640, leadership: 2 },
   { id: "S5-M", name: "Specialist 5 Mounted", tier: 5, branch: "Specialists", role: "mounted", strength: 520, health: 3120, leadership: 2 },
-  { id: "S4-M", name: "Specialist 4 Mounted", tier: 4, branch: "Specialists", role: "mounted", strength: 290, health: 1740, leadership: 2 },
-  { id: "S3-M", name: "Specialist 3 Mounted", tier: 3, branch: "Specialists", role: "mounted", strength: 160, health: 960, leadership: 2 },
-  { id: "S2-M", name: "Specialist 2 Mounted", tier: 2, branch: "Specialists", role: "mounted", strength: 90, health: 540, leadership: 2 },
-  { id: "S1-M", name: "Specialist 1 Mounted", tier: 1, branch: "Specialists", role: "mounted", strength: 50, health: 300, leadership: 2 },
   
   // Guards - Melee
   { id: "G9", name: "Guard 9", tier: 9, branch: "Guards", role: "melee", strength: 5510, health: 16530, leadership: 1 },
