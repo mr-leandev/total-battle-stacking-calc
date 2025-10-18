@@ -4,7 +4,7 @@ A powerful, interactive calculator for optimizing troop stacks in Total Battle. 
 
 ## Features
 
-- **Multi-tier Support**: Guards (G1-G7) and Specialists (S1-S9) across all roles
+- **Multi-tier Support**: Guards (G1-G9) and Specialists (S1-S9) across all roles
 - **All Unit Roles**: Melee, Ranged, Mounted, and Flying units
 - **Smart Balancing**: Automatically balances health across all selected unit types
 - **Tier-based Color Coding**: Visual tier identification with game-accurate colors
