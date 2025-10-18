@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stacking Calculator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Total Battle Stacking Calculator</h1>
+      <p class="intro">
+        Tell the calculator what your hero can field, set the leadership cap, and decide how much
+        extra health lower tiers should carry. Higher tiers stay lean while lower tiers get padded
+        so their total health stays tight together.
+      </p>
+    </header>
+
+    <section class="controls card">
+      <div class="control-row">
+        <label for="leadership-input">Leadership cap</label>
+        <input id="leadership-input" type="number" min="0" value="50000" step="1000">
+      </div>
+
+      <div class="control-row">
+        <label for="cushion-input">Lower-tier health padding (%)</label>
+        <div class="control-stack">
+          <input id="cushion-input" type="number" value="0" step="1" min="0" max="100">
+          <span class="hint">Each tier below the top gets this much extra total HP.</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <label for="target-health-input">Reference health target</label>
+        <input id="target-health-input" type="number" value="1000000" step="100000" min="100000">
+        <span class="hint">Used for per-tier ratios; does not cap total health.</span>
+      </div>
+    </section>
+
+    <section class="units card">
+      <div class="section-header">
+        <h2>Troop Access</h2>
+      </div>
+      <p class="section-blurb">Enable each branch your hero can field, select the highest tier unlocked, then choose which specific tiers to include in your stack. Your selections are saved automatically.</p>
+      <div id="branch-controls" class="branch-grid"></div>
+    </section>
+
+    <section class="results card">
+      <div class="section-header">
+        <h2>Hero Stack Recommendation</h2>
+        <div class="summary" id="summary"></div>
+      </div>
+      <div id="warning" class="warning hidden"></div>
+      <div class="table-wrapper">
+        <table id="result-table">
+          <thead>
+            <tr>
+              <th>Unit</th>
+              <th>Role</th>
+              <th>Units</th>
+              <th>Leadership</th>
+              <th>Total Health</th>
+              <th>Health Share</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
