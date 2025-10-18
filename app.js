@@ -735,7 +735,10 @@ function updateResults() {
       </td>
       <td><strong>${baseId}</strong></td>
       <td><span class="role-badge role-${row.role}">${row.role}</span></td>
-      <td>${formatNumber(row.assignedUnits)}</td>
+      <td class="units-cell">
+        <span class="units-value">${formatNumber(row.assignedUnits)}</span>
+        <button class="copy-btn" data-value="${row.assignedUnits}" title="Copy to clipboard">📋</button>
+      </td>
       <td>${formatLeadership(row.leadershipUsed)}</td>
       <td>${formatNumber(row.healthPool)}</td>
       <td>${formatPercent(row.healthShare)}</td>
@@ -758,9 +761,32 @@ function updateResults() {
       updateArmyProgress();
     });
     
-    // Allow clicking anywhere on row to toggle checkbox
+    // Add copy button handler
+    const copyBtn = tr.querySelector('.copy-btn');
+    copyBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const value = copyBtn.dataset.value;
+      try {
+        await navigator.clipboard.writeText(value);
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = '✓';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.textContent = originalText;
+          copyBtn.classList.remove('copied');
+        }, 1500);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+        copyBtn.textContent = '✗';
+        setTimeout(() => {
+          copyBtn.textContent = '📋';
+        }, 1500);
+      }
+    });
+    
+    // Allow clicking anywhere on row to toggle checkbox (except copy button)
     tr.addEventListener('click', (e) => {
-      if (e.target.type !== 'checkbox') {
+      if (e.target.type !== 'checkbox' && !e.target.classList.contains('copy-btn')) {
         checkbox.checked = !checkbox.checked;
         checkbox.dispatchEvent(new Event('change'));
       }

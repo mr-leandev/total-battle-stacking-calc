@@ -292,6 +292,51 @@ tbody tr {
   color: #94a3b8;
 }
 
+.units-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.units-value {
+  flex: 1;
+}
+
+.copy-btn {
+  padding: 4px 8px;
+  font-size: 0.9rem;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0;
+  min-width: 32px;
+}
+
+tr:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: #3b82f6;
+  transform: scale(1.05);
+}
+
+.copy-btn:active {
+  transform: scale(0.95);
+}
+
+.copy-btn.copied {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: #10b981;
+  color: #10b981;
+  opacity: 1;
+}
+
 thead {
   background: rgba(15, 23, 42, 0.7);
 }
@@ -304,6 +349,7 @@ tbody tr:hover:not(.tier-header) {
 .tier-header {
   background: rgba(15, 23, 42, 0.9) !important;
   border-top: 2px solid rgba(148, 163, 184, 0.3);
+  cursor: default !important;
 }
 
 .tier-header:first-child {
