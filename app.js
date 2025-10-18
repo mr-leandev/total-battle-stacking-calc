@@ -85,10 +85,12 @@ const BRANCH_REGISTRY = {};
 TROOPS.forEach((unit) => {
   const key = unit.branch;
   if (!BRANCH_REGISTRY[key]) {
+    // Extract base prefix (G or S) before any numbers or suffixes
+    const basePrefix = unit.id.match(/^[A-Z]+/)[0];
     BRANCH_REGISTRY[key] = {
       key,
       label: unit.branch,
-      prefix: unit.id.replace(/[0-9]/g, ""),
+      prefix: basePrefix,
       tiers: new Set(),
     };
   }
