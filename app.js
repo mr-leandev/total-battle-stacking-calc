@@ -184,6 +184,9 @@ function saveCheckedUnits(checkedUnits) {
 // Track which units have been added to army
 let checkedUnits = loadCheckedUnits();
 
+// Track current results for army progress calculation
+let currentResults = [];
+
 function getBranchUnlockedTiers(entry) {
   const maxTier = Number(entry.select.value);
   return entry.config.tiers.filter((tier) => tier <= maxTier).sort((a, b) => b - a);
@@ -639,20 +642,65 @@ function formatPercent(value) {
   return percentFormatter.format(value);
 }
 
+function updateArmyProgress() {
+  const progressFill = document.getElementById("army-progress-fill");
+  const progressText = document.getElementById("army-progress-text");
+  
+  if (!currentResults.length) {
+    progressFill.style.width = "0%";
+    progressText.textContent = "0 / 0";
+    return;
+  }
+  
+  // Calculate total leadership from checked units
+  let checkedLeadership = 0;
+  let totalLeadership = 0;
+  
+  currentResults.forEach(row => {
+    const unitKey = `${row.id}-${row.assignedUnits}`;
+    totalLeadership += row.leadershipUsed;
+    if (checkedUnits.has(unitKey)) {
+      checkedLeadership += row.leadershipUsed;
+    }
+  });
+  
+  const percentage = totalLeadership > 0 ? (checkedLeadership / totalLeadership) * 100 : 0;
+  progressFill.style.width = `${percentage}%`;
+  progressText.textContent = `${formatNumber(checkedLeadership)} / ${formatNumber(totalLeadership)}`;
+  
+  // Change color based on progress
+  if (percentage >= 100) {
+    progressFill.style.background = "linear-gradient(90deg, #10b981, #059669)";
+  } else if (percentage >= 75) {
+    progressFill.style.background = "linear-gradient(90deg, #3b82f6, #2563eb)";
+  } else if (percentage >= 50) {
+    progressFill.style.background = "linear-gradient(90deg, #eab308, #ca8a04)";
+  } else {
+    progressFill.style.background = "linear-gradient(90deg, #94a3b8, #64748b)";
+  }
+}
+
 function updateResults() {
   const { rows, totals, error, warning } = computeRecommendation();
   resultTableBody.innerHTML = "";
+  
+  // Store current results for army progress calculation
+  currentResults = rows;
 
   if (error) {
     summaryEl.innerHTML = "";
     warningEl.textContent = error;
     warningEl.classList.remove("hidden");
+    currentResults = [];
+    updateArmyProgress();
     return;
   }
 
   if (!rows.length || !totals) {
     summaryEl.innerHTML = "";
     warningEl.classList.add("hidden");
+    currentResults = [];
+    updateArmyProgress();
     return;
   }
 
@@ -715,6 +763,7 @@ function updateResults() {
         tr.classList.remove('checked-row');
       }
       saveCheckedUnits(checkedUnits);
+      updateArmyProgress();
     });
     
     // Allow clicking anywhere on row to toggle checkbox
@@ -741,6 +790,9 @@ function updateResults() {
     <strong>${formatNumber(totals.totalHealth)}</strong>. Lower-tier padding:
     <strong>${totals.cushionPercent}%</strong>.
   `;
+  
+  // Update army progress bar
+  updateArmyProgress();
 }
 
 function initEvents() {
@@ -763,6 +815,7 @@ function initEvents() {
     checkedUnits.clear();
     saveCheckedUnits(checkedUnits);
     updateResults();
+    updateArmyProgress();
   });
 }
 
