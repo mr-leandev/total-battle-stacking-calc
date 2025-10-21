@@ -1117,21 +1117,31 @@ function computeMonsterRecommendation() {
     tierDominanceAllocation.set(tier, allocation);
   });
   
-  // Within each tier, distribute dominance to achieve equal health pools
+  // Within each tier, calculate target health pool and distribute to achieve equal health
   const monsterAllocations = [];
   
   tiers.forEach(tier => {
     const tierMonsters = tierGroups.get(tier);
     const tierDominance = tierDominanceAllocation.get(tier);
+    const numMonsters = tierMonsters.length;
     
-    // Calculate inverse health weights (monsters with lower HP need more units for equal health pool)
-    const totalInverseHealthWeight = tierMonsters.reduce((sum, m) => sum + (1 / m.health), 0);
+    // Calculate what total health we can get with the allocated dominance
+    // We want to distribute health equally among monsters
+    // Each monster should have: targetHealthPerMonster = totalTierHealth / numMonsters
     
+    // To find optimal distribution, we need to solve for units where health is equal
+    // Let's use an iterative approach: calculate units needed for equal health pools
+    
+    // Calculate average HP/dominance for the tier
+    const avgHpPerDom = tierMonsters.reduce((sum, m) => sum + (m.health / m.dominance), 0) / numMonsters;
+    
+    // Estimate total health from tier dominance allocation
+    const estimatedTierHealth = tierDominance * avgHpPerDom;
+    const targetHealthPerMonster = estimatedTierHealth / numMonsters;
+    
+    // For each monster, calculate units needed to reach target health
     tierMonsters.forEach(monster => {
-      // Allocate dominance inversely proportional to health to achieve equal health pools
-      const inverseHealthWeight = (1 / monster.health) / totalInverseHealthWeight;
-      const allocatedDominance = tierDominance * inverseHealthWeight;
-      const expectedUnits = allocatedDominance / monster.dominance;
+      const expectedUnits = targetHealthPerMonster / monster.health;
       
       monsterAllocations.push({
         monster,
