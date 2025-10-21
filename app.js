@@ -906,10 +906,10 @@ function loadMonsterSettings() {
       const settings = JSON.parse(stored);
       if (settings.dominanceCap !== undefined) dominanceInput.value = settings.dominanceCap;
       if (settings.cushion !== undefined) monsterCushionInput.value = settings.cushion;
-      return settings.monsters || { enabled: false, highestTier: MONSTER_TIERS[0], useTiers: [] };
+      return settings.monsters || { enabled: true, highestTier: MONSTER_TIERS[0], useTiers: [] };
     }
   } catch {}
-  return { enabled: false, highestTier: MONSTER_TIERS[0], useTiers: [] };
+  return { enabled: true, highestTier: MONSTER_TIERS[0], useTiers: [] };
 }
 
 function saveMonsterSettings() {
@@ -1092,17 +1092,17 @@ function computeMonsterRecommendation() {
   });
   
   const tiers = Array.from(tierGroups.keys()).sort((a, b) => b - a);
-  const highestTier = tiers[0];
   
-  // Calculate HP per dominance for each tier
+  // Calculate average HP per dominance for each tier
   const tierHpPerDominance = new Map();
   tiers.forEach(tier => {
-    const sampleMonster = tierGroups.get(tier)[0];
-    tierHpPerDominance.set(tier, sampleMonster.health / sampleMonster.dominance);
+    const tierMonsters = tierGroups.get(tier);
+    const avgHpPerDom = tierMonsters.reduce((sum, m) => sum + (m.health / m.dominance), 0) / tierMonsters.length;
+    tierHpPerDominance.set(tier, avgHpPerDom);
   });
   
-  // Calculate dominance allocation for each tier (inverse weighting)
-  const tierDominanceWeights = new Map();
+  // Calculate dominance allocation for each tier (inverse weighting with cushion)
+  const tierDominanceAllocation = new Map();
   const totalTierWeight = tiers.reduce((sum, tier, index) => {
     const hpPerDominance = tierHpPerDominance.get(tier);
     const cushionBoost = Math.pow(cushionMultiplier, index);
@@ -1113,54 +1113,43 @@ function computeMonsterRecommendation() {
     const hpPerDominance = tierHpPerDominance.get(tier);
     const cushionBoost = Math.pow(cushionMultiplier, index);
     const weight = (1 / hpPerDominance) * cushionBoost;
-    tierDominanceWeights.set(tier, weight / totalTierWeight);
+    const allocation = (weight / totalTierWeight) * dominanceCap;
+    tierDominanceAllocation.set(tier, allocation);
   });
   
-  // Count monster types per tier
-  const tierMonsterCounts = new Map();
+  // Within each tier, distribute dominance to achieve equal health pools
+  const monsterAllocations = [];
+  
   tiers.forEach(tier => {
-    tierMonsterCounts.set(tier, tierGroups.get(tier).length);
-  });
-  
-  // Build enriched monsters
-  const enrichedMonsters = monsters.map((monster) => {
-    const tierIndex = tiers.indexOf(monster.tier);
-    const tierDominanceWeight = tierDominanceWeights.get(monster.tier);
-    const monstersInTier = tierMonsterCounts.get(monster.tier);
+    const tierMonsters = tierGroups.get(tier);
+    const tierDominance = tierDominanceAllocation.get(tier);
     
-    const dominanceFraction = tierDominanceWeight / monstersInTier;
+    // Calculate inverse health weights (monsters with lower HP need more units for equal health pool)
+    const totalInverseHealthWeight = tierMonsters.reduce((sum, m) => sum + (1 / m.health), 0);
     
-    return {
-      monster,
-      tierIndex,
-      dominanceFraction,
-      dominanceWeight: dominanceFraction,
-      expectedUnits: 0,
-      assignedUnits: 0,
-      fraction: 0,
-    };
+    tierMonsters.forEach(monster => {
+      // Allocate dominance inversely proportional to health to achieve equal health pools
+      const inverseHealthWeight = (1 / monster.health) / totalInverseHealthWeight;
+      const allocatedDominance = tierDominance * inverseHealthWeight;
+      const expectedUnits = allocatedDominance / monster.dominance;
+      
+      monsterAllocations.push({
+        monster,
+        tier,
+        tierIndex: tiers.indexOf(tier),
+        expectedUnits,
+        assignedUnits: Math.floor(expectedUnits),
+        fraction: expectedUnits - Math.floor(expectedUnits),
+      });
+    });
   });
 
-  const totalRelativeDominance = enrichedMonsters.reduce((sum, entry) => sum + entry.dominanceWeight, 0);
+  let usedDominance = monsterAllocations.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.dominance, 0);
 
-  if (totalRelativeDominance === 0) {
-    return { error: "Unable to compute ratios for the selected monsters.", rows: [], totals: null };
-  }
-
-  enrichedMonsters.forEach((entry) => {
-    const dominanceAllocated = entry.dominanceFraction * dominanceCap;
-    const expectedUnits = dominanceAllocated / entry.monster.dominance;
-    entry.expectedUnits = expectedUnits;
-    entry.assignedUnits = Math.floor(expectedUnits);
-    entry.fraction = expectedUnits - entry.assignedUnits;
-  });
-
-  let usedDominance = enrichedMonsters.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.dominance, 0);
-
-  // Distribute remaining dominance
+  // Distribute remaining dominance by largest fractional components
   let leftover = dominanceCap - usedDominance;
-  if (leftover >= Math.min(...enrichedMonsters.map((entry) => entry.monster.dominance))) {
-    const fractionalOrder = [...enrichedMonsters].sort((a, b) => b.fraction - a.fraction);
+  if (leftover >= Math.min(...monsterAllocations.map((entry) => entry.monster.dominance))) {
+    const fractionalOrder = [...monsterAllocations].sort((a, b) => b.fraction - a.fraction);
     fractionalOrder.forEach((entry) => {
       if (leftover >= entry.monster.dominance && entry.fraction > 0) {
         entry.assignedUnits += 1;
@@ -1169,43 +1158,20 @@ function computeMonsterRecommendation() {
     });
   }
 
-  usedDominance = enrichedMonsters.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.dominance, 0);
+  usedDominance = monsterAllocations.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.dominance, 0);
   leftover = dominanceCap - usedDominance;
 
-  // Ensure the highest tier is represented
-  if (enrichedMonsters[0].assignedUnits === 0 && dominanceCap >= enrichedMonsters[0].monster.dominance) {
-    let required = enrichedMonsters[0].monster.dominance - Math.max(0, leftover);
-    const donors = enrichedMonsters
-      .slice(1)
-      .filter((entry) => entry.assignedUnits > 0)
-      .sort((a, b) => a.monster.health - b.monster.health);
+  const totalHealth = monsterAllocations.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.health, 0);
+  
+  // Calculate average health pool for top tier
+  const topTierMonsters = monsterAllocations.filter(e => e.tierIndex === 0);
+  const avgTopTierHealth = topTierMonsters.reduce((sum, e) => sum + (e.assignedUnits * e.monster.health), 0) / topTierMonsters.length;
 
-    for (const donor of donors) {
-      while (donor.assignedUnits > 0 && required > 0) {
-        donor.assignedUnits -= 1;
-        usedDominance -= donor.monster.dominance;
-        required -= donor.monster.dominance;
-      }
-      if (required <= 0) {
-        break;
-      }
-    }
-
-    if (required <= 0) {
-      enrichedMonsters[0].assignedUnits = 1;
-      usedDominance += enrichedMonsters[0].monster.dominance;
-      leftover = dominanceCap - usedDominance;
-    }
-  }
-
-  const totalHealth = enrichedMonsters.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.health, 0);
-  const highestHealthPool = enrichedMonsters[0].assignedUnits * enrichedMonsters[0].monster.health || 1;
-
-  const rows = enrichedMonsters.map((entry) => {
+  const rows = monsterAllocations.map((entry) => {
     const dominanceUsed = entry.assignedUnits * entry.monster.dominance;
     const healthPool = entry.assignedUnits * entry.monster.health;
     const healthShare = totalHealth > 0 ? healthPool / totalHealth : 0;
-    const relativeToTop = healthPool && highestHealthPool ? healthPool / highestHealthPool : 0;
+    const relativeToTop = healthPool && avgTopTierHealth ? healthPool / avgTopTierHealth : 0;
     const notes = entry.tierIndex === 0
       ? "Top tier"
       : `${((relativeToTop - 1) * 100).toFixed(1)}% vs top tier`;
@@ -1229,11 +1195,11 @@ function computeMonsterRecommendation() {
       usedDominance,
       leftover,
       totalHealth,
-      topTier: enrichedMonsters[0].monster.id,
+      topTier: topTierMonsters[0]?.monster.id || "",
       healthPerDominance: usedDominance ? totalHealth / usedDominance : 0,
       cushionPercent,
     },
-    warning: enrichedMonsters[0].assignedUnits === 0 ? "Dominance cap is too low to include the top tier monster." : "",
+    warning: topTierMonsters.every(e => e.assignedUnits === 0) ? "Dominance cap is too low to include the top tier monster." : "",
   };
 }
 
