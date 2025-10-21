@@ -870,27 +870,8 @@ renderBranchControls();
 // MONSTER SYSTEM
 // ============================================================================
 
-const MONSTER_TYPES = ["Dragons", "Elementals", "Giants", "Beasts"];
-const MONSTER_REGISTRY = {};
-
-// Build monster registry by type
-MONSTERS.forEach((monster) => {
-  const key = monster.type;
-  if (!MONSTER_REGISTRY[key]) {
-    MONSTER_REGISTRY[key] = {
-      name: key,
-      tiers: [],
-      monsters: [],
-    };
-  }
-  MONSTER_REGISTRY[key].tiers.push(monster.tier);
-  MONSTER_REGISTRY[key].monsters.push(monster);
-});
-
-// Sort tiers
-Object.values(MONSTER_REGISTRY).forEach((type) => {
-  type.tiers = Array.from(new Set(type.tiers)).sort((a, b) => b - a);
-});
+// Build monster registry - all types unlock together by tier
+const MONSTER_TIERS = Array.from(new Set(MONSTERS.map(m => m.tier))).sort((a, b) => b - a);
 
 const dominanceInput = document.getElementById("dominance-input");
 const monsterCushionInput = document.getElementById("monster-cushion-input");
@@ -925,172 +906,165 @@ function loadMonsterSettings() {
       const settings = JSON.parse(stored);
       if (settings.dominanceCap !== undefined) dominanceInput.value = settings.dominanceCap;
       if (settings.cushion !== undefined) monsterCushionInput.value = settings.cushion;
-      return settings.monsterTypes || {};
+      return settings.monsters || { enabled: false, highestTier: MONSTER_TIERS[0], useTiers: [] };
     }
   } catch {}
-  return {};
+  return { enabled: false, highestTier: MONSTER_TIERS[0], useTiers: [] };
 }
 
 function saveMonsterSettings() {
   try {
-    const monsterTypes = {};
-    MONSTER_TYPES.forEach((type) => {
-      const enabledCheckbox = document.getElementById(`monster-${type}-enabled`);
-      const highestTierSelect = document.getElementById(`monster-${type}-highest-tier`);
-      const useTiersContainer = document.getElementById(`monster-${type}-use-tiers`);
-      if (enabledCheckbox && highestTierSelect && useTiersContainer) {
-        const useTiers = Array.from(useTiersContainer.querySelectorAll('input[type="checkbox"]:checked'))
-          .map(cb => Number(cb.value));
-        monsterTypes[type] = {
-          enabled: enabledCheckbox.checked,
-          highestTier: Number(highestTierSelect.value),
-          useTiers,
-        };
-      }
-    });
+    const enabledCheckbox = document.getElementById("monsters-enabled");
+    const highestTierSelect = document.getElementById("monsters-highest-tier");
+    const useTiersContainer = document.getElementById("monsters-use-tiers");
+    
+    const monsters = { enabled: false, highestTier: MONSTER_TIERS[0], useTiers: [] };
+    
+    if (enabledCheckbox && highestTierSelect && useTiersContainer) {
+      const useTiers = Array.from(useTiersContainer.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(cb => Number(cb.value));
+      monsters.enabled = enabledCheckbox.checked;
+      monsters.highestTier = Number(highestTierSelect.value);
+      monsters.useTiers = useTiers;
+    }
+    
     localStorage.setItem("monsterSettings", JSON.stringify({
       dominanceCap: Number(dominanceInput.value),
       cushion: Number(monsterCushionInput.value),
-      monsterTypes,
+      monsters,
     }));
   } catch {}
 }
 
 function renderMonsterControls() {
-  const savedSettings = loadMonsterSettings();
+  const saved = loadMonsterSettings();
   monsterControlsContainer.innerHTML = "";
 
-  MONSTER_TYPES.forEach((type) => {
-    const config = MONSTER_REGISTRY[type];
-    if (!config) return;
+  const card = document.createElement("div");
+  card.className = "branch-card";
 
-    const saved = savedSettings[type] || { enabled: false, highestTier: config.tiers[0], useTiers: [] };
+  const header = document.createElement("div");
+  header.className = "branch-card-header";
 
-    const card = document.createElement("div");
-    card.className = "branch-card";
+  const enableCheckbox = document.createElement("input");
+  enableCheckbox.type = "checkbox";
+  enableCheckbox.id = "monsters-enabled";
+  enableCheckbox.checked = saved.enabled;
 
-    const header = document.createElement("div");
-    header.className = "branch-card-header";
+  const nameLabel = document.createElement("label");
+  nameLabel.htmlFor = "monsters-enabled";
+  nameLabel.textContent = "Monsters";
 
-    const enableCheckbox = document.createElement("input");
-    enableCheckbox.type = "checkbox";
-    enableCheckbox.id = `monster-${type}-enabled`;
-    enableCheckbox.checked = saved.enabled;
+  header.append(enableCheckbox, nameLabel);
 
-    const nameLabel = document.createElement("label");
-    nameLabel.htmlFor = `monster-${type}-enabled`;
-    nameLabel.textContent = config.name;
+  const body = document.createElement("div");
+  body.className = "branch-card-body";
 
-    header.append(enableCheckbox, nameLabel);
+  const tierLabel = document.createElement("label");
+  tierLabel.textContent = "Highest Tier:";
+  tierLabel.htmlFor = "monsters-highest-tier";
 
-    const body = document.createElement("div");
-    body.className = "branch-card-body";
-
-    const tierLabel = document.createElement("label");
-    tierLabel.textContent = "Highest Tier:";
-    tierLabel.htmlFor = `monster-${type}-highest-tier`;
-
-    const tierSelect = document.createElement("select");
-    tierSelect.id = `monster-${type}-highest-tier`;
-    tierSelect.disabled = !saved.enabled;
-    config.tiers.forEach((tier) => {
-      const option = document.createElement("option");
-      option.value = tier;
-      option.textContent = `M${tier}`;
-      if (tier === saved.highestTier) option.selected = true;
-      tierSelect.append(option);
-    });
-
-    const useTiersContainer = document.createElement("div");
-    useTiersContainer.id = `monster-${type}-use-tiers`;
-    useTiersContainer.className = "tier-checkboxes";
-
-    const tierButtonBar = document.createElement("div");
-    tierButtonBar.className = "tier-button-bar";
-
-    const selectAllBtn = document.createElement("button");
-    selectAllBtn.textContent = "Select all";
-    selectAllBtn.className = "tier-btn tier-btn-enable";
-    selectAllBtn.type = "button";
-
-    const clearAllBtn = document.createElement("button");
-    clearAllBtn.textContent = "Clear all";
-    clearAllBtn.className = "tier-btn tier-btn-clear";
-    clearAllBtn.type = "button";
-
-    tierButtonBar.append(selectAllBtn, clearAllBtn);
-
-    body.append(tierLabel, tierSelect, tierButtonBar, useTiersContainer);
-    card.append(header, body);
-    monsterControlsContainer.append(card);
-
-    const updateMonsterTierControls = () => {
-      const highestTier = Number(tierSelect.value);
-      const availableTiers = config.tiers.filter(t => t <= highestTier);
-      useTiersContainer.innerHTML = "";
-
-      if (availableTiers.length > 0) {
-        availableTiers.forEach((tier) => {
-          const label = document.createElement("label");
-          label.className = "tier-checkbox-label";
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.value = tier;
-          checkbox.checked = saved.useTiers.includes(tier);
-          checkbox.addEventListener("change", () => {
-            updateMonsterResults();
-            saveMonsterSettings();
-          });
-          label.append(checkbox, ` M${tier}`);
-          useTiersContainer.append(label);
-        });
-      }
-    };
-
-    enableCheckbox.addEventListener("change", () => {
-      tierSelect.disabled = !enableCheckbox.checked;
-      const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach(cb => cb.disabled = !enableCheckbox.checked);
-      updateMonsterResults();
-      saveMonsterSettings();
-    });
-
-    tierSelect.addEventListener("change", () => {
-      updateMonsterTierControls();
-      updateMonsterResults();
-      saveMonsterSettings();
-    });
-
-    selectAllBtn.addEventListener("click", () => {
-      const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
-    });
-
-    clearAllBtn.addEventListener("click", () => {
-      const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
-    });
-
-    updateMonsterTierControls();
+  const tierSelect = document.createElement("select");
+  tierSelect.id = "monsters-highest-tier";
+  tierSelect.disabled = !saved.enabled;
+  MONSTER_TIERS.forEach((tier) => {
+    const option = document.createElement("option");
+    option.value = tier;
+    option.textContent = `M${tier}`;
+    if (tier === saved.highestTier) option.selected = true;
+    tierSelect.append(option);
   });
+
+  const useTiersContainer = document.createElement("div");
+  useTiersContainer.id = "monsters-use-tiers";
+  useTiersContainer.className = "tier-checkboxes";
+
+  const tierButtonBar = document.createElement("div");
+  tierButtonBar.className = "tier-button-bar";
+
+  const selectAllBtn = document.createElement("button");
+  selectAllBtn.textContent = "Select all";
+  selectAllBtn.className = "tier-btn tier-btn-enable";
+  selectAllBtn.type = "button";
+
+  const clearAllBtn = document.createElement("button");
+  clearAllBtn.textContent = "Clear all";
+  clearAllBtn.className = "tier-btn tier-btn-clear";
+  clearAllBtn.type = "button";
+
+  tierButtonBar.append(selectAllBtn, clearAllBtn);
+
+  body.append(tierLabel, tierSelect, tierButtonBar, useTiersContainer);
+  card.append(header, body);
+  monsterControlsContainer.append(card);
+
+  const updateMonsterTierControls = () => {
+    const highestTier = Number(tierSelect.value);
+    const availableTiers = MONSTER_TIERS.filter(t => t <= highestTier);
+    useTiersContainer.innerHTML = "";
+
+    if (availableTiers.length > 0) {
+      availableTiers.forEach((tier) => {
+        const label = document.createElement("label");
+        label.className = "tier-checkbox-label";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = tier;
+        checkbox.checked = saved.useTiers.includes(tier);
+        checkbox.addEventListener("change", () => {
+          updateMonsterResults();
+          saveMonsterSettings();
+        });
+        label.append(checkbox, ` M${tier}`);
+        useTiersContainer.append(label);
+      });
+    }
+  };
+
+  enableCheckbox.addEventListener("change", () => {
+    tierSelect.disabled = !enableCheckbox.checked;
+    const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.disabled = !enableCheckbox.checked);
+    updateMonsterResults();
+    saveMonsterSettings();
+  });
+
+  tierSelect.addEventListener("change", () => {
+    updateMonsterTierControls();
+    updateMonsterResults();
+    saveMonsterSettings();
+  });
+
+  selectAllBtn.addEventListener("click", () => {
+    const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
+  });
+
+  clearAllBtn.addEventListener("click", () => {
+    const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
+  });
+
+  updateMonsterTierControls();
 }
 
 function getSelectedMonsters() {
   const selected = [];
-  MONSTER_TYPES.forEach((type) => {
-    const enabledCheckbox = document.getElementById(`monster-${type}-enabled`);
-    const useTiersContainer = document.getElementById(`monster-${type}-use-tiers`);
-    if (enabledCheckbox && enabledCheckbox.checked && useTiersContainer) {
-      const useTiers = Array.from(useTiersContainer.querySelectorAll('input[type="checkbox"]:checked'))
-        .map(cb => Number(cb.value));
-      const config = MONSTER_REGISTRY[type];
-      config.monsters.forEach((monster) => {
-        if (useTiers.includes(monster.tier)) {
-          selected.push(monster);
-        }
-      });
-    }
-  });
+  const enabledCheckbox = document.getElementById("monsters-enabled");
+  const useTiersContainer = document.getElementById("monsters-use-tiers");
+  
+  if (enabledCheckbox && enabledCheckbox.checked && useTiersContainer) {
+    const useTiers = Array.from(useTiersContainer.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(cb => Number(cb.value));
+    
+    // When a tier is selected, all 4 monster types at that tier are available
+    MONSTERS.forEach((monster) => {
+      if (useTiers.includes(monster.tier)) {
+        selected.push(monster);
+      }
+    });
+  }
+  
   return selected;
 }
 
