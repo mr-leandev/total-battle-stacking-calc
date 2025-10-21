@@ -48,7 +48,7 @@
 
     <section class="results card">
       <div class="section-header">
-        <h2>Hero Stack Recommendation</h2>
+        <h2>🛡️ Hero Stack Recommendation (Leadership)</h2>
         <button id="clear-checked-btn" class="clear-checked-btn" title="Clear all checkmarks">Clear Checked</button>
       </div>
       <div class="summary" id="summary"></div>
@@ -78,6 +78,64 @@
             </tr>
           </thead>
           <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-header">
+        <h2>🐉 Monster Configuration</h2>
+      </div>
+      <div class="control-row">
+        <label for="dominance-input">Hero Dominance Cap</label>
+        <div class="control-stack">
+          <input id="dominance-input" type="number" value="0" step="1" min="0">
+          <span class="hint">Maximum dominance your hero can command for monsters</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label for="monster-cushion-input">Lower-tier health padding (%)</label>
+        <div class="control-stack">
+          <input id="monster-cushion-input" type="number" value="10" step="1" min="0" max="100">
+          <span class="hint">Gives lower tiers extra HP to protect elite monsters. Recommended: 5-15%</span>
+        </div>
+      </div>
+      <p class="section-blurb">Select which monster types you have access to and the highest tier unlocked for each.</p>
+      <div id="monster-controls" class="branch-grid"></div>
+    </section>
+
+    <section class="results card">
+      <div class="section-header">
+        <h2>🐉 Monster Stack Recommendation (Dominance)</h2>
+        <button id="clear-monsters-btn" class="clear-checked-btn" title="Clear all checkmarks">Clear Checked</button>
+      </div>
+      <div class="summary" id="monster-summary"></div>
+      <div class="army-progress" id="monster-progress">
+        <div class="army-progress-label">
+          <span class="army-icon">🐉</span>
+          <span>Monster Army Built:</span>
+        </div>
+        <div class="army-progress-bar">
+          <div class="army-progress-fill" id="monster-progress-fill"></div>
+          <div class="army-progress-text" id="monster-progress-text">0 / 0</div>
+        </div>
+      </div>
+      <div id="monster-warning" class="warning hidden"></div>
+      <div class="table-wrapper">
+        <table id="monster-result-table">
+          <thead>
+            <tr>
+              <th class="check-column">✓</th>
+              <th>Monster</th>
+              <th>Type</th>
+              <th>Count</th>
+              <th>Dominance</th>
+              <th>Health Pool</th>
+              <th>Health Share</th>
+              <th>vs Top Tier</th>
+            </tr>
+          </thead>
+          <tbody id="monster-result-table-body"></tbody>
         </table>
       </div>
     </section>

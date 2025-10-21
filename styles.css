@@ -399,6 +399,31 @@ tbody tr:hover:not(.tier-header) {
   border: 1px solid rgba(139, 92, 246, 0.4);
 }
 
+/* Monster type badges */
+.role-dragons {
+  background: rgba(220, 38, 38, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.role-elementals {
+  background: rgba(37, 99, 235, 0.2);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.role-giants {
+  background: rgba(101, 163, 13, 0.2);
+  color: #bef264;
+  border: 1px solid rgba(132, 204, 22, 0.4);
+}
+
+.role-beasts {
+  background: rgba(217, 119, 6, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
 .role-mounted {
   background: rgba(251, 146, 60, 0.2);
   color: #fdba74;

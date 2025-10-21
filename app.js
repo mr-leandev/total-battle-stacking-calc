@@ -72,6 +72,32 @@ const TROOPS = [
   { id: "G1-M", name: "Guard 1 Mounted", tier: 1, branch: "Guards", role: "mounted", strength: 50, health: 300, leadership: 2 },
 ];
 
+const MONSTERS = [
+  // Tier 7 Dragons
+  { id: "M7-Dragon", name: "Black Dragon", tier: 7, branch: "Monsters", type: "Dragons", strength: 0, health: 900000, dominance: 44 },
+  
+  // Tier 7 Elementals
+  { id: "M7-Elemental", name: "Wind Lord", tier: 7, branch: "Monsters", type: "Elementals", strength: 0, health: 930000, dominance: 45 },
+  
+  // Tier 7 Giants
+  { id: "M7-Giant", name: "Destructive Colossus", tier: 7, branch: "Monsters", type: "Giants", strength: 0, health: 870000, dominance: 43 },
+  
+  // Tier 7 Beasts
+  { id: "M7-Beast", name: "Ancient Terror", tier: 7, branch: "Monsters", type: "Beasts", strength: 0, health: 840000, dominance: 41 },
+  
+  // Tier 6 Dragons
+  { id: "M6-Dragon", name: "Crystal Dragon", tier: 6, branch: "Monsters", type: "Dragons", strength: 0, health: 360000, dominance: 33 },
+  
+  // Tier 6 Elementals
+  { id: "M6-Elemental", name: "Ruby Golem", tier: 6, branch: "Monsters", type: "Elementals", strength: 0, health: 390000, dominance: 35 },
+  
+  // Tier 6 Giants
+  { id: "M6-Giant", name: "Troll Rider", tier: 6, branch: "Monsters", type: "Giants", strength: 0, health: 330000, dominance: 30 },
+  
+  // Tier 6 Beasts
+  { id: "M6-Beast", name: "Jungle Destroyer", tier: 6, branch: "Monsters", type: "Beasts", strength: 0, health: 390000, dominance: 34 },
+];
+
 const BRANCH_REGISTRY = {};
 
 TROOPS.forEach((unit) => {
@@ -839,3 +865,590 @@ function initEvents() {
 
 initEvents();
 renderBranchControls();
+
+// ============================================================================
+// MONSTER SYSTEM
+// ============================================================================
+
+const MONSTER_TYPES = ["Dragons", "Elementals", "Giants", "Beasts"];
+const MONSTER_REGISTRY = {};
+
+// Build monster registry by type
+MONSTERS.forEach((monster) => {
+  const key = monster.type;
+  if (!MONSTER_REGISTRY[key]) {
+    MONSTER_REGISTRY[key] = {
+      name: key,
+      tiers: [],
+      monsters: [],
+    };
+  }
+  MONSTER_REGISTRY[key].tiers.push(monster.tier);
+  MONSTER_REGISTRY[key].monsters.push(monster);
+});
+
+// Sort tiers
+Object.values(MONSTER_REGISTRY).forEach((type) => {
+  type.tiers = Array.from(new Set(type.tiers)).sort((a, b) => b - a);
+});
+
+const dominanceInput = document.getElementById("dominance-input");
+const monsterCushionInput = document.getElementById("monster-cushion-input");
+const monsterControlsContainer = document.getElementById("monster-controls");
+const monsterSummaryEl = document.getElementById("monster-summary");
+const monsterWarningEl = document.getElementById("monster-warning");
+const monsterResultTableBody = document.getElementById("monster-result-table-body");
+const monsterProgressFill = document.getElementById("monster-progress-fill");
+const monsterProgressText = document.getElementById("monster-progress-text");
+
+const checkedMonsters = loadCheckedMonsters();
+
+function loadCheckedMonsters() {
+  try {
+    const stored = localStorage.getItem("checkedMonsters");
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCheckedMonsters(set) {
+  try {
+    localStorage.setItem("checkedMonsters", JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+function loadMonsterSettings() {
+  try {
+    const stored = localStorage.getItem("monsterSettings");
+    if (stored) {
+      const settings = JSON.parse(stored);
+      if (settings.dominanceCap !== undefined) dominanceInput.value = settings.dominanceCap;
+      if (settings.cushion !== undefined) monsterCushionInput.value = settings.cushion;
+      return settings.monsterTypes || {};
+    }
+  } catch {}
+  return {};
+}
+
+function saveMonsterSettings() {
+  try {
+    const monsterTypes = {};
+    MONSTER_TYPES.forEach((type) => {
+      const enabledCheckbox = document.getElementById(`monster-${type}-enabled`);
+      const highestTierSelect = document.getElementById(`monster-${type}-highest-tier`);
+      const useTiersContainer = document.getElementById(`monster-${type}-use-tiers`);
+      if (enabledCheckbox && highestTierSelect && useTiersContainer) {
+        const useTiers = Array.from(useTiersContainer.querySelectorAll('input[type="checkbox"]:checked'))
+          .map(cb => Number(cb.value));
+        monsterTypes[type] = {
+          enabled: enabledCheckbox.checked,
+          highestTier: Number(highestTierSelect.value),
+          useTiers,
+        };
+      }
+    });
+    localStorage.setItem("monsterSettings", JSON.stringify({
+      dominanceCap: Number(dominanceInput.value),
+      cushion: Number(monsterCushionInput.value),
+      monsterTypes,
+    }));
+  } catch {}
+}
+
+function renderMonsterControls() {
+  const savedSettings = loadMonsterSettings();
+  monsterControlsContainer.innerHTML = "";
+
+  MONSTER_TYPES.forEach((type) => {
+    const config = MONSTER_REGISTRY[type];
+    if (!config) return;
+
+    const saved = savedSettings[type] || { enabled: false, highestTier: config.tiers[0], useTiers: [] };
+
+    const card = document.createElement("div");
+    card.className = "branch-card";
+
+    const header = document.createElement("div");
+    header.className = "branch-card-header";
+
+    const enableCheckbox = document.createElement("input");
+    enableCheckbox.type = "checkbox";
+    enableCheckbox.id = `monster-${type}-enabled`;
+    enableCheckbox.checked = saved.enabled;
+
+    const nameLabel = document.createElement("label");
+    nameLabel.htmlFor = `monster-${type}-enabled`;
+    nameLabel.textContent = config.name;
+
+    header.append(enableCheckbox, nameLabel);
+
+    const body = document.createElement("div");
+    body.className = "branch-card-body";
+
+    const tierLabel = document.createElement("label");
+    tierLabel.textContent = "Highest Tier:";
+    tierLabel.htmlFor = `monster-${type}-highest-tier`;
+
+    const tierSelect = document.createElement("select");
+    tierSelect.id = `monster-${type}-highest-tier`;
+    tierSelect.disabled = !saved.enabled;
+    config.tiers.forEach((tier) => {
+      const option = document.createElement("option");
+      option.value = tier;
+      option.textContent = `M${tier}`;
+      if (tier === saved.highestTier) option.selected = true;
+      tierSelect.append(option);
+    });
+
+    const useTiersContainer = document.createElement("div");
+    useTiersContainer.id = `monster-${type}-use-tiers`;
+    useTiersContainer.className = "tier-checkboxes";
+
+    const tierButtonBar = document.createElement("div");
+    tierButtonBar.className = "tier-button-bar";
+
+    const selectAllBtn = document.createElement("button");
+    selectAllBtn.textContent = "Select all";
+    selectAllBtn.className = "tier-btn tier-btn-enable";
+    selectAllBtn.type = "button";
+
+    const clearAllBtn = document.createElement("button");
+    clearAllBtn.textContent = "Clear all";
+    clearAllBtn.className = "tier-btn tier-btn-clear";
+    clearAllBtn.type = "button";
+
+    tierButtonBar.append(selectAllBtn, clearAllBtn);
+
+    body.append(tierLabel, tierSelect, tierButtonBar, useTiersContainer);
+    card.append(header, body);
+    monsterControlsContainer.append(card);
+
+    const updateMonsterTierControls = () => {
+      const highestTier = Number(tierSelect.value);
+      const availableTiers = config.tiers.filter(t => t <= highestTier);
+      useTiersContainer.innerHTML = "";
+
+      if (availableTiers.length > 0) {
+        availableTiers.forEach((tier) => {
+          const label = document.createElement("label");
+          label.className = "tier-checkbox-label";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = tier;
+          checkbox.checked = saved.useTiers.includes(tier);
+          checkbox.addEventListener("change", () => {
+            updateMonsterResults();
+            saveMonsterSettings();
+          });
+          label.append(checkbox, ` M${tier}`);
+          useTiersContainer.append(label);
+        });
+      }
+    };
+
+    enableCheckbox.addEventListener("change", () => {
+      tierSelect.disabled = !enableCheckbox.checked;
+      const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => cb.disabled = !enableCheckbox.checked);
+      updateMonsterResults();
+      saveMonsterSettings();
+    });
+
+    tierSelect.addEventListener("change", () => {
+      updateMonsterTierControls();
+      updateMonsterResults();
+      saveMonsterSettings();
+    });
+
+    selectAllBtn.addEventListener("click", () => {
+      const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
+    });
+
+    clearAllBtn.addEventListener("click", () => {
+      const checkboxes = useTiersContainer.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
+    });
+
+    updateMonsterTierControls();
+  });
+}
+
+function getSelectedMonsters() {
+  const selected = [];
+  MONSTER_TYPES.forEach((type) => {
+    const enabledCheckbox = document.getElementById(`monster-${type}-enabled`);
+    const useTiersContainer = document.getElementById(`monster-${type}-use-tiers`);
+    if (enabledCheckbox && enabledCheckbox.checked && useTiersContainer) {
+      const useTiers = Array.from(useTiersContainer.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(cb => Number(cb.value));
+      const config = MONSTER_REGISTRY[type];
+      config.monsters.forEach((monster) => {
+        if (useTiers.includes(monster.tier)) {
+          selected.push(monster);
+        }
+      });
+    }
+  });
+  return selected;
+}
+
+function computeMonsterRecommendation() {
+  const dominanceCap = Number(dominanceInput.value) || 0;
+  const cushionPercent = Math.max(0, Number(monsterCushionInput.value) || 0);
+  const cushionMultiplier = 1 + cushionPercent / 100;
+  const monsters = getSelectedMonsters();
+
+  if (!dominanceCap || dominanceCap <= 0) {
+    return { error: "Set a dominance cap above zero.", rows: [], totals: null };
+  }
+
+  if (!monsters.length) {
+    return { error: "Enable at least one monster type and tier.", rows: [], totals: null };
+  }
+
+  // Group monsters by tier
+  const tierGroups = new Map();
+  monsters.forEach(monster => {
+    if (!tierGroups.has(monster.tier)) {
+      tierGroups.set(monster.tier, []);
+    }
+    tierGroups.get(monster.tier).push(monster);
+  });
+  
+  const tiers = Array.from(tierGroups.keys()).sort((a, b) => b - a);
+  const highestTier = tiers[0];
+  
+  // Calculate HP per dominance for each tier
+  const tierHpPerDominance = new Map();
+  tiers.forEach(tier => {
+    const sampleMonster = tierGroups.get(tier)[0];
+    tierHpPerDominance.set(tier, sampleMonster.health / sampleMonster.dominance);
+  });
+  
+  // Calculate dominance allocation for each tier (inverse weighting)
+  const tierDominanceWeights = new Map();
+  const totalTierWeight = tiers.reduce((sum, tier, index) => {
+    const hpPerDominance = tierHpPerDominance.get(tier);
+    const cushionBoost = Math.pow(cushionMultiplier, index);
+    return sum + (1 / hpPerDominance) * cushionBoost;
+  }, 0);
+  
+  tiers.forEach((tier, index) => {
+    const hpPerDominance = tierHpPerDominance.get(tier);
+    const cushionBoost = Math.pow(cushionMultiplier, index);
+    const weight = (1 / hpPerDominance) * cushionBoost;
+    tierDominanceWeights.set(tier, weight / totalTierWeight);
+  });
+  
+  // Count monster types per tier
+  const tierMonsterCounts = new Map();
+  tiers.forEach(tier => {
+    tierMonsterCounts.set(tier, tierGroups.get(tier).length);
+  });
+  
+  // Build enriched monsters
+  const enrichedMonsters = monsters.map((monster) => {
+    const tierIndex = tiers.indexOf(monster.tier);
+    const tierDominanceWeight = tierDominanceWeights.get(monster.tier);
+    const monstersInTier = tierMonsterCounts.get(monster.tier);
+    
+    const dominanceFraction = tierDominanceWeight / monstersInTier;
+    
+    return {
+      monster,
+      tierIndex,
+      dominanceFraction,
+      dominanceWeight: dominanceFraction,
+      expectedUnits: 0,
+      assignedUnits: 0,
+      fraction: 0,
+    };
+  });
+
+  const totalRelativeDominance = enrichedMonsters.reduce((sum, entry) => sum + entry.dominanceWeight, 0);
+
+  if (totalRelativeDominance === 0) {
+    return { error: "Unable to compute ratios for the selected monsters.", rows: [], totals: null };
+  }
+
+  enrichedMonsters.forEach((entry) => {
+    const dominanceAllocated = entry.dominanceFraction * dominanceCap;
+    const expectedUnits = dominanceAllocated / entry.monster.dominance;
+    entry.expectedUnits = expectedUnits;
+    entry.assignedUnits = Math.floor(expectedUnits);
+    entry.fraction = expectedUnits - entry.assignedUnits;
+  });
+
+  let usedDominance = enrichedMonsters.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.dominance, 0);
+
+  // Distribute remaining dominance
+  let leftover = dominanceCap - usedDominance;
+  if (leftover >= Math.min(...enrichedMonsters.map((entry) => entry.monster.dominance))) {
+    const fractionalOrder = [...enrichedMonsters].sort((a, b) => b.fraction - a.fraction);
+    fractionalOrder.forEach((entry) => {
+      if (leftover >= entry.monster.dominance && entry.fraction > 0) {
+        entry.assignedUnits += 1;
+        leftover -= entry.monster.dominance;
+      }
+    });
+  }
+
+  usedDominance = enrichedMonsters.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.dominance, 0);
+  leftover = dominanceCap - usedDominance;
+
+  // Ensure the highest tier is represented
+  if (enrichedMonsters[0].assignedUnits === 0 && dominanceCap >= enrichedMonsters[0].monster.dominance) {
+    let required = enrichedMonsters[0].monster.dominance - Math.max(0, leftover);
+    const donors = enrichedMonsters
+      .slice(1)
+      .filter((entry) => entry.assignedUnits > 0)
+      .sort((a, b) => a.monster.health - b.monster.health);
+
+    for (const donor of donors) {
+      while (donor.assignedUnits > 0 && required > 0) {
+        donor.assignedUnits -= 1;
+        usedDominance -= donor.monster.dominance;
+        required -= donor.monster.dominance;
+      }
+      if (required <= 0) {
+        break;
+      }
+    }
+
+    if (required <= 0) {
+      enrichedMonsters[0].assignedUnits = 1;
+      usedDominance += enrichedMonsters[0].monster.dominance;
+      leftover = dominanceCap - usedDominance;
+    }
+  }
+
+  const totalHealth = enrichedMonsters.reduce((sum, entry) => sum + entry.assignedUnits * entry.monster.health, 0);
+  const highestHealthPool = enrichedMonsters[0].assignedUnits * enrichedMonsters[0].monster.health || 1;
+
+  const rows = enrichedMonsters.map((entry) => {
+    const dominanceUsed = entry.assignedUnits * entry.monster.dominance;
+    const healthPool = entry.assignedUnits * entry.monster.health;
+    const healthShare = totalHealth > 0 ? healthPool / totalHealth : 0;
+    const relativeToTop = healthPool && highestHealthPool ? healthPool / highestHealthPool : 0;
+    const notes = entry.tierIndex === 0
+      ? "Top tier"
+      : `${((relativeToTop - 1) * 100).toFixed(1)}% vs top tier`;
+    return {
+      id: entry.monster.id,
+      name: entry.monster.name,
+      type: entry.monster.type,
+      tier: entry.monster.tier,
+      dominanceUsed,
+      assignedUnits: entry.assignedUnits,
+      healthPool,
+      healthShare,
+      notes,
+    };
+  });
+
+  return {
+    rows,
+    totals: {
+      dominanceCap,
+      usedDominance,
+      leftover,
+      totalHealth,
+      topTier: enrichedMonsters[0].monster.id,
+      healthPerDominance: usedDominance ? totalHealth / usedDominance : 0,
+      cushionPercent,
+    },
+    warning: enrichedMonsters[0].assignedUnits === 0 ? "Dominance cap is too low to include the top tier monster." : "",
+  };
+}
+
+function updateMonsterProgress() {
+  const result = computeMonsterRecommendation();
+  if (result.error || !result.totals) {
+    monsterProgressFill.style.width = "0%";
+    monsterProgressText.textContent = "0 / 0";
+    return;
+  }
+
+  const used = result.rows.reduce((sum, row) => {
+    const key = row.id;
+    if (checkedMonsters.has(key)) {
+      return sum + row.dominanceUsed;
+    }
+    return sum;
+  }, 0);
+
+  const cap = result.totals.dominanceCap;
+  const percentage = cap > 0 ? (used / cap) * 100 : 0;
+  
+  monsterProgressFill.style.width = `${Math.min(percentage, 100)}%`;
+  monsterProgressText.textContent = `${formatNumber(used)} / ${formatNumber(cap)}`;
+  
+  // Color coding
+  if (percentage >= 95) {
+    monsterProgressFill.style.background = "linear-gradient(90deg, #10b981, #059669)";
+  } else if (percentage >= 50) {
+    monsterProgressFill.style.background = "linear-gradient(90deg, #3b82f6, #2563eb)";
+  } else {
+    monsterProgressFill.style.background = "linear-gradient(90deg, #94a3b8, #64748b)";
+  }
+}
+
+function updateMonsterResults() {
+  const result = computeMonsterRecommendation();
+
+  monsterResultTableBody.innerHTML = "";
+  monsterWarningEl.textContent = "";
+  monsterWarningEl.classList.add("hidden");
+  monsterSummaryEl.innerHTML = "";
+
+  if (result.error) {
+    monsterWarningEl.textContent = result.error;
+    monsterWarningEl.classList.remove("hidden");
+    updateMonsterProgress();
+    return;
+  }
+
+  if (result.warning) {
+    monsterWarningEl.textContent = result.warning;
+    monsterWarningEl.classList.remove("hidden");
+  }
+
+  const { rows, totals } = result;
+
+  // Sort by tier (desc), then by type
+  rows.sort((a, b) => {
+    if (a.tier !== b.tier) return b.tier - a.tier;
+    return a.type.localeCompare(b.type);
+  });
+
+  // Group by tier
+  const tierMap = new Map();
+  rows.forEach((row) => {
+    if (!tierMap.has(row.tier)) tierMap.set(row.tier, []);
+    tierMap.get(row.tier).push(row);
+  });
+
+  tierMap.forEach((tierRows, tier) => {
+    // Tier header
+    const headerRow = document.createElement("tr");
+    headerRow.className = "tier-header";
+    headerRow.innerHTML = `<td colspan="8" class="tier-header-cell"><span class="tier-badge tier-${tier}">Tier ${tier}</span></td>`;
+    monsterResultTableBody.append(headerRow);
+
+    // Monster rows
+    tierRows.forEach((row) => {
+      const tr = document.createElement("tr");
+      const monsterKey = row.id;
+      const isChecked = checkedMonsters.has(monsterKey);
+      
+      if (isChecked) {
+        tr.classList.add('checked-row');
+      }
+      
+      tr.innerHTML = `
+        <td class="check-cell">
+          <input type="checkbox" class="monster-checkbox" data-monster-key="${monsterKey}" ${isChecked ? 'checked' : ''}>
+        </td>
+        <td><strong>${row.name}</strong></td>
+        <td><span class="role-badge role-${row.type.toLowerCase()}">${row.type}</span></td>
+        <td class="units-cell">
+          <span class="units-value">${formatNumber(row.assignedUnits)}</span>
+          <button class="copy-btn" data-value="${row.assignedUnits}" title="Copy to clipboard">📋</button>
+        </td>
+        <td>${formatNumber(row.dominanceUsed)}</td>
+        <td>${formatNumber(row.healthPool)}</td>
+        <td>${formatPercent(row.healthShare)}</td>
+        <td>${row.notes}</td>
+      `;
+      
+      // Checkbox handler
+      const checkbox = tr.querySelector('.monster-checkbox');
+      checkbox.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const key = checkbox.dataset.monsterKey;
+        if (checkbox.checked) {
+          checkedMonsters.add(key);
+          tr.classList.add('checked-row');
+        } else {
+          checkedMonsters.delete(key);
+          tr.classList.remove('checked-row');
+        }
+        saveCheckedMonsters(checkedMonsters);
+        updateMonsterProgress();
+      });
+      
+      // Copy button handler
+      const copyBtn = tr.querySelector('.copy-btn');
+      copyBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const value = copyBtn.dataset.value;
+        try {
+          await navigator.clipboard.writeText(value);
+          const originalText = copyBtn.textContent;
+          copyBtn.textContent = '✓';
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.textContent = originalText;
+            copyBtn.classList.remove('copied');
+          }, 1500);
+        } catch (err) {
+          console.error('Failed to copy:', err);
+          copyBtn.textContent = '✗';
+          setTimeout(() => {
+            copyBtn.textContent = '📋';
+          }, 1500);
+        }
+      });
+      
+      // Row click handler
+      tr.addEventListener('click', (e) => {
+        if (e.target.type !== 'checkbox' && !e.target.classList.contains('copy-btn')) {
+          checkbox.checked = !checkbox.checked;
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+      
+      monsterResultTableBody.append(tr);
+    });
+  });
+
+  const leftoverLabel = totals.leftover > 0
+    ? `${formatNumber(totals.leftover)} spare`
+    : totals.leftover < 0
+      ? `${formatNumber(Math.abs(totals.leftover))} over cap`
+      : "uses full dominance";
+
+  monsterSummaryEl.innerHTML = `
+    Hero commands <strong>${formatNumber(totals.usedDominance)}</strong> of
+    <strong>${formatNumber(totals.dominanceCap)}</strong> dominance —
+    ${leftoverLabel}. Total stack health:
+    <strong>${formatNumber(totals.totalHealth)}</strong>. Lower-tier padding:
+    <strong>${totals.cushionPercent}%</strong>.
+  `;
+  
+  updateMonsterProgress();
+}
+
+function initMonsterEvents() {
+  dominanceInput.addEventListener("input", () => {
+    updateMonsterResults();
+    saveMonsterSettings();
+  });
+  monsterCushionInput.addEventListener("input", () => {
+    updateMonsterResults();
+    saveMonsterSettings();
+  });
+  
+  const clearMonstersBtn = document.getElementById("clear-monsters-btn");
+  clearMonstersBtn.addEventListener("click", () => {
+    checkedMonsters.clear();
+    saveCheckedMonsters(checkedMonsters);
+    updateMonsterResults();
+    updateMonsterProgress();
+  });
+}
+
+initMonsterEvents();
+renderMonsterControls();
