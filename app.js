@@ -73,29 +73,17 @@ const TROOPS = [
 ];
 
 const MONSTERS = [
-  // Tier 7 Dragons
-  { id: "M7-Dragon", name: "Black Dragon", tier: 7, branch: "Monsters", type: "Dragons", strength: 0, health: 900000, dominance: 44 },
+  // Tier 7 - Game order: Elementals, Dragons, Giants, Beasts
+  { id: "M7-Elemental", name: "Wind Lord", tier: 7, branch: "Monsters", type: "Elementals", strength: 0, health: 930000, dominance: 45, order: 1 },
+  { id: "M7-Dragon", name: "Black Dragon", tier: 7, branch: "Monsters", type: "Dragons", strength: 0, health: 900000, dominance: 44, order: 2 },
+  { id: "M7-Giant", name: "Destructive Colossus", tier: 7, branch: "Monsters", type: "Giants", strength: 0, health: 870000, dominance: 43, order: 3 },
+  { id: "M7-Beast", name: "Ancient Terror", tier: 7, branch: "Monsters", type: "Beasts", strength: 0, health: 840000, dominance: 41, order: 4 },
   
-  // Tier 7 Elementals
-  { id: "M7-Elemental", name: "Wind Lord", tier: 7, branch: "Monsters", type: "Elementals", strength: 0, health: 930000, dominance: 45 },
-  
-  // Tier 7 Giants
-  { id: "M7-Giant", name: "Destructive Colossus", tier: 7, branch: "Monsters", type: "Giants", strength: 0, health: 870000, dominance: 43 },
-  
-  // Tier 7 Beasts
-  { id: "M7-Beast", name: "Ancient Terror", tier: 7, branch: "Monsters", type: "Beasts", strength: 0, health: 840000, dominance: 41 },
-  
-  // Tier 6 Dragons
-  { id: "M6-Dragon", name: "Crystal Dragon", tier: 6, branch: "Monsters", type: "Dragons", strength: 0, health: 360000, dominance: 33 },
-  
-  // Tier 6 Elementals
-  { id: "M6-Elemental", name: "Ruby Golem", tier: 6, branch: "Monsters", type: "Elementals", strength: 0, health: 390000, dominance: 35 },
-  
-  // Tier 6 Giants
-  { id: "M6-Giant", name: "Troll Rider", tier: 6, branch: "Monsters", type: "Giants", strength: 0, health: 330000, dominance: 30 },
-  
-  // Tier 6 Beasts
-  { id: "M6-Beast", name: "Jungle Destroyer", tier: 6, branch: "Monsters", type: "Beasts", strength: 0, health: 390000, dominance: 34 },
+  // Tier 6 - Game order: Elementals, Beasts, Dragons, Giants
+  { id: "M6-Elemental", name: "Ruby Golem", tier: 6, branch: "Monsters", type: "Elementals", strength: 0, health: 390000, dominance: 35, order: 1 },
+  { id: "M6-Beast", name: "Jungle Destroyer", tier: 6, branch: "Monsters", type: "Beasts", strength: 0, health: 390000, dominance: 34, order: 2 },
+  { id: "M6-Dragon", name: "Crystal Dragon", tier: 6, branch: "Monsters", type: "Dragons", strength: 0, health: 360000, dominance: 33, order: 3 },
+  { id: "M6-Giant", name: "Troll Rider", tier: 6, branch: "Monsters", type: "Giants", strength: 0, health: 330000, dominance: 30, order: 4 },
 ];
 
 const BRANCH_REGISTRY = {};
@@ -1190,6 +1178,7 @@ function computeMonsterRecommendation() {
       name: entry.monster.name,
       type: entry.monster.type,
       tier: entry.monster.tier,
+      order: entry.monster.order,
       dominanceUsed,
       assignedUnits: entry.assignedUnits,
       healthPool,
@@ -1267,10 +1256,10 @@ function updateMonsterResults() {
 
   const { rows, totals } = result;
 
-  // Sort by tier (desc), then by type
+  // Sort by tier (desc), then by game order
   rows.sort((a, b) => {
     if (a.tier !== b.tier) return b.tier - a.tier;
-    return a.type.localeCompare(b.type);
+    return a.order - b.order;
   });
 
   // Group by tier
