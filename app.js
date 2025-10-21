@@ -1146,7 +1146,7 @@ function computeMonsterRecommendation() {
   // Within each tier, calculate target health pool and distribute to achieve equal health
   const monsterAllocations = [];
   
-  tiers.forEach(tier => {
+  tiers.forEach((tier, tierIndex) => {
     const tierMonsters = tierGroups.get(tier);
     const tierDominance = tierDominanceAllocation.get(tier);
     const numMonsters = tierMonsters.length;
@@ -1154,8 +1154,10 @@ function computeMonsterRecommendation() {
     let tierTargetHealth;
     
     if (mode === "match" && targetHealthPerMonster !== null) {
-      // In match mode, use the target health from troop calculator
-      tierTargetHealth = targetHealthPerMonster;
+      // In match mode, use the target health from troop calculator as baseline
+      // Apply cushion multiplier to lower tiers (higher health for protection)
+      const cushionBoost = Math.pow(cushionMultiplier, tierIndex);
+      tierTargetHealth = targetHealthPerMonster * cushionBoost;
     } else {
       // In max mode, calculate what total health we can get with the allocated dominance
       // We want to distribute health equally among monsters
@@ -1176,7 +1178,7 @@ function computeMonsterRecommendation() {
       monsterAllocations.push({
         monster,
         tier,
-        tierIndex: tiers.indexOf(tier),
+        tierIndex: tierIndex,
         expectedUnits,
         assignedUnits: Math.floor(expectedUnits),
         fraction: expectedUnits - Math.floor(expectedUnits),
