@@ -128,6 +128,17 @@ const summaryEl = document.getElementById("summary");
 const warningEl = document.getElementById("warning");
 const branchElements = {};
 
+// Monster system element references (declared early to avoid initialization errors)
+const dominanceInput = document.getElementById("dominance-input");
+const monsterModeSelect = document.getElementById("monster-mode");
+const monsterCushionInput = document.getElementById("monster-cushion-input");
+const monsterControlsContainer = document.getElementById("monster-controls");
+const monsterSummaryEl = document.getElementById("monster-summary");
+const monsterWarningEl = document.getElementById("monster-warning");
+const monsterResultTableBody = document.getElementById("monster-result-table-body");
+const monsterProgressFill = document.getElementById("monster-progress-fill");
+const monsterProgressText = document.getElementById("monster-progress-text");
+
 // LocalStorage keys
 const STORAGE_KEY = "stacking-calc-settings";
 const CHECKED_UNITS_KEY = "stacking-calc-checked-units";
@@ -865,16 +876,6 @@ renderBranchControls();
 
 // Build monster registry - all types unlock together by tier
 const MONSTER_TIERS = Array.from(new Set(MONSTERS.map(m => m.tier))).sort((a, b) => b - a);
-
-const dominanceInput = document.getElementById("dominance-input");
-const monsterModeSelect = document.getElementById("monster-mode");
-const monsterCushionInput = document.getElementById("monster-cushion-input");
-const monsterControlsContainer = document.getElementById("monster-controls");
-const monsterSummaryEl = document.getElementById("monster-summary");
-const monsterWarningEl = document.getElementById("monster-warning");
-const monsterResultTableBody = document.getElementById("monster-result-table-body");
-const monsterProgressFill = document.getElementById("monster-progress-fill");
-const monsterProgressText = document.getElementById("monster-progress-text");
 
 const checkedMonsters = loadCheckedMonsters();
 
