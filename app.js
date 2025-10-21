@@ -934,6 +934,17 @@ function saveMonsterSettings() {
 
 function renderMonsterControls() {
   const saved = loadMonsterSettings();
+  
+  if (!monsterControlsContainer) {
+    console.error("Monster controls container not found!");
+    return;
+  }
+  
+  if (!MONSTER_TIERS || MONSTER_TIERS.length === 0) {
+    console.error("No monster tiers available!");
+    return;
+  }
+  
   monsterControlsContainer.innerHTML = "";
 
   const card = document.createElement("div");
@@ -1428,5 +1439,13 @@ function initMonsterEvents() {
   });
 }
 
-initMonsterEvents();
-renderMonsterControls();
+// Ensure monster controls render after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    initMonsterEvents();
+    renderMonsterControls();
+  });
+} else {
+  initMonsterEvents();
+  renderMonsterControls();
+}
