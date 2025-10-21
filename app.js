@@ -825,6 +825,11 @@ function updateResults() {
   
   // Update army progress bar
   updateArmyProgress();
+  
+  // If monster calculator is in match mode, update it as troop results changed
+  if (monsterModeSelect && monsterModeSelect.value === "match") {
+    updateMonsterResults();
+  }
 }
 
 function initEvents() {
@@ -862,6 +867,7 @@ renderBranchControls();
 const MONSTER_TIERS = Array.from(new Set(MONSTERS.map(m => m.tier))).sort((a, b) => b - a);
 
 const dominanceInput = document.getElementById("dominance-input");
+const monsterModeSelect = document.getElementById("monster-mode");
 const monsterCushionInput = document.getElementById("monster-cushion-input");
 const monsterControlsContainer = document.getElementById("monster-controls");
 const monsterSummaryEl = document.getElementById("monster-summary");
@@ -894,6 +900,7 @@ function loadMonsterSettings() {
       const settings = JSON.parse(stored);
       if (settings.dominanceCap !== undefined) dominanceInput.value = settings.dominanceCap;
       if (settings.cushion !== undefined) monsterCushionInput.value = settings.cushion;
+      if (settings.mode !== undefined) monsterModeSelect.value = settings.mode;
       return settings.monsters || { enabled: true, highestTier: MONSTER_TIERS[0], useTiers: [] };
     }
   } catch {}
@@ -919,6 +926,7 @@ function saveMonsterSettings() {
     localStorage.setItem("monsterSettings", JSON.stringify({
       dominanceCap: Number(dominanceInput.value),
       cushion: Number(monsterCushionInput.value),
+      mode: monsterModeSelect.value,
       monsters,
     }));
   } catch {}
@@ -1061,6 +1069,7 @@ function computeMonsterRecommendation() {
   const cushionPercent = Math.max(0, Number(monsterCushionInput.value) || 0);
   const cushionMultiplier = 1 + cushionPercent / 100;
   const monsters = getSelectedMonsters();
+  const mode = monsterModeSelect.value;
 
   if (!dominanceCap || dominanceCap <= 0) {
     return { error: "Set a dominance cap above zero.", rows: [], totals: null };
@@ -1068,6 +1077,23 @@ function computeMonsterRecommendation() {
 
   if (!monsters.length) {
     return { error: "Enable at least one monster type and tier.", rows: [], totals: null };
+  }
+  
+  // In "match" mode, get target health from troop calculator
+  let targetHealthPerMonster = null;
+  if (mode === "match") {
+    const troopResult = computeRecommendation();
+    if (troopResult.rows && troopResult.rows.length > 0) {
+      // Find the minimum health pool from troop results
+      const minTroopHealth = Math.min(...troopResult.rows.map(r => r.healthPool));
+      targetHealthPerMonster = minTroopHealth;
+    } else {
+      return { 
+        error: "Match mode requires troop calculator results. Enable troops and configure your stack first.", 
+        rows: [], 
+        totals: null 
+      };
+    }
   }
 
   // Group monsters by tier
@@ -1113,23 +1139,27 @@ function computeMonsterRecommendation() {
     const tierDominance = tierDominanceAllocation.get(tier);
     const numMonsters = tierMonsters.length;
     
-    // Calculate what total health we can get with the allocated dominance
-    // We want to distribute health equally among monsters
-    // Each monster should have: targetHealthPerMonster = totalTierHealth / numMonsters
+    let tierTargetHealth;
     
-    // To find optimal distribution, we need to solve for units where health is equal
-    // Let's use an iterative approach: calculate units needed for equal health pools
-    
-    // Calculate average HP/dominance for the tier
-    const avgHpPerDom = tierMonsters.reduce((sum, m) => sum + (m.health / m.dominance), 0) / numMonsters;
-    
-    // Estimate total health from tier dominance allocation
-    const estimatedTierHealth = tierDominance * avgHpPerDom;
-    const targetHealthPerMonster = estimatedTierHealth / numMonsters;
+    if (mode === "match" && targetHealthPerMonster !== null) {
+      // In match mode, use the target health from troop calculator
+      tierTargetHealth = targetHealthPerMonster;
+    } else {
+      // In max mode, calculate what total health we can get with the allocated dominance
+      // We want to distribute health equally among monsters
+      // Each monster should have: targetHealthPerMonster = totalTierHealth / numMonsters
+      
+      // Calculate average HP/dominance for the tier
+      const avgHpPerDom = tierMonsters.reduce((sum, m) => sum + (m.health / m.dominance), 0) / numMonsters;
+      
+      // Estimate total health from tier dominance allocation
+      const estimatedTierHealth = tierDominance * avgHpPerDom;
+      tierTargetHealth = estimatedTierHealth / numMonsters;
+    }
     
     // For each monster, calculate units needed to reach target health
     tierMonsters.forEach(monster => {
-      const expectedUnits = targetHealthPerMonster / monster.health;
+      const expectedUnits = tierTargetHealth / monster.health;
       
       monsterAllocations.push({
         monster,
@@ -1358,13 +1388,18 @@ function updateMonsterResults() {
     : totals.leftover < 0
       ? `${formatNumber(Math.abs(totals.leftover))} over cap`
       : "uses full dominance";
+  
+  const mode = monsterModeSelect.value;
+  const modeLabel = mode === "match" 
+    ? " <span style='color: #10b981;'>⚖ Matched to troop health</span>"
+    : "";
 
   monsterSummaryEl.innerHTML = `
     Hero commands <strong>${formatNumber(totals.usedDominance)}</strong> of
     <strong>${formatNumber(totals.dominanceCap)}</strong> dominance —
     ${leftoverLabel}. Total stack health:
     <strong>${formatNumber(totals.totalHealth)}</strong>. Lower-tier padding:
-    <strong>${totals.cushionPercent}%</strong>.
+    <strong>${totals.cushionPercent}%</strong>.${modeLabel}
   `;
   
   updateMonsterProgress();
@@ -1372,6 +1407,10 @@ function updateMonsterResults() {
 
 function initMonsterEvents() {
   dominanceInput.addEventListener("input", () => {
+    updateMonsterResults();
+    saveMonsterSettings();
+  });
+  monsterModeSelect.addEventListener("change", () => {
     updateMonsterResults();
     saveMonsterSettings();
   });
