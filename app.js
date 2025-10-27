@@ -740,7 +740,37 @@ function updateResults() {
     return;
   }
 
-  if (!rows.length || !totals) {
+  // Get all selected units (including excluded ones) to display them greyed out
+  const allUnits = getSelectedUnits();
+  const excludedUnitRows = allUnits
+    .filter(unit => excludedUnits.has(unit.id))
+    .map(unit => ({
+      id: unit.id,
+      name: unit.name,
+      tier: unit.tier,
+      role: unit.role,
+      branch: unit.branch,
+      assignedUnits: 0,
+      leadershipUsed: 0,
+      healthPool: 0,
+      healthShare: 0,
+      notes: "Excluded"
+    }));
+
+  // Combine calculated rows with excluded unit rows
+  const allRows = [...rows, ...excludedUnitRows];
+  
+  // Sort all rows by tier (desc), then by branch priority, then by role
+  allRows.sort((a, b) => {
+    if (a.tier !== b.tier) return b.tier - a.tier;
+    const branchOrder = { "Guards": 1, "Specialists": 2 };
+    const branchDiff = (branchOrder[a.branch] || 3) - (branchOrder[b.branch] || 3);
+    if (branchDiff !== 0) return branchDiff;
+    const rolePriority = { "flying": 1, "mounted": 2, "melee": 3, "ranged": 4 };
+    return (rolePriority[a.role] || 999) - (rolePriority[b.role] || 999);
+  });
+
+  if (!allRows.length) {
     summaryEl.innerHTML = "";
     warningEl.classList.add("hidden");
     currentResults = [];
@@ -753,7 +783,7 @@ function updateResults() {
 
   // Group rows by tier for visual organization
   let currentTier = null;
-  rows.forEach((row, index) => {
+  allRows.forEach((row, index) => {
     const unitTier = row.tier;
     
     // Add tier header when tier changes
@@ -778,7 +808,9 @@ function updateResults() {
     const isChecked = checkedUnits.has(unitKey);
     const isExcluded = excludedUnits.has(row.id);
     
-    if (isChecked) {
+    if (isExcluded) {
+      tr.classList.add('excluded-row');
+    } else if (isChecked) {
       tr.classList.add('checked-row');
     }
     
@@ -1367,15 +1399,35 @@ function updateMonsterResults() {
 
   const { rows, totals } = result;
 
+  // Get all selected monsters (including excluded ones) to display them greyed out
+  const allMonsters = getSelectedMonsters();
+  const excludedMonsterRows = allMonsters
+    .filter(monster => excludedMonsters.has(monster.id))
+    .map(monster => ({
+      id: monster.id,
+      name: monster.name,
+      tier: monster.tier,
+      type: monster.type,
+      order: monster.order,
+      assignedUnits: 0,
+      dominanceUsed: 0,
+      healthPool: 0,
+      healthShare: 0,
+      notes: "Excluded"
+    }));
+
+  // Combine calculated rows with excluded monster rows
+  const allRows = [...rows, ...excludedMonsterRows];
+
   // Sort by tier (desc), then by game order
-  rows.sort((a, b) => {
+  allRows.sort((a, b) => {
     if (a.tier !== b.tier) return b.tier - a.tier;
     return a.order - b.order;
   });
 
   // Group by tier
   const tierMap = new Map();
-  rows.forEach((row) => {
+  allRows.forEach((row) => {
     if (!tierMap.has(row.tier)) tierMap.set(row.tier, []);
     tierMap.get(row.tier).push(row);
   });
@@ -1394,7 +1446,9 @@ function updateMonsterResults() {
       const isChecked = checkedMonsters.has(monsterKey);
       const isExcluded = excludedMonsters.has(row.id);
       
-      if (isChecked) {
+      if (isExcluded) {
+        tr.classList.add('excluded-row');
+      } else if (isChecked) {
         tr.classList.add('checked-row');
       }
       
