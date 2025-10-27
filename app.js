@@ -142,6 +142,7 @@ const monsterProgressText = document.getElementById("monster-progress-text");
 // LocalStorage keys
 const STORAGE_KEY = "stacking-calc-settings";
 const CHECKED_UNITS_KEY = "stacking-calc-checked-units";
+const EXCLUDED_UNITS_KEY = "stacking-calc-excluded-units";
 
 // Load settings from localStorage
 function loadSettings() {
@@ -198,8 +199,31 @@ function saveCheckedUnits(checkedUnits) {
   }
 }
 
+// Load excluded units from localStorage
+function loadExcludedUnits() {
+  try {
+    const saved = localStorage.getItem(EXCLUDED_UNITS_KEY);
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  } catch (e) {
+    console.warn("Failed to load excluded units from localStorage:", e);
+    return new Set();
+  }
+}
+
+// Save excluded units to localStorage
+function saveExcludedUnits(excludedUnits) {
+  try {
+    localStorage.setItem(EXCLUDED_UNITS_KEY, JSON.stringify(Array.from(excludedUnits)));
+  } catch (e) {
+    console.warn("Failed to save excluded units to localStorage:", e);
+  }
+}
+
 // Track which units have been added to army
 let checkedUnits = loadCheckedUnits();
+
+// Track which units are excluded from calculation
+let excludedUnits = loadExcludedUnits();
 
 // Track current results for army progress calculation
 let currentResults = [];
@@ -495,7 +519,10 @@ function computeRecommendation() {
   const cushionPercent = Math.max(0, Number(cushionInput.value) || 0);
   const cushionMultiplier = 1 + cushionPercent / 100;
   const targetHealth = Math.max(1000, Number(targetHealthInput.value) || 1000000);
-  const units = getSelectedUnits();
+  const allUnits = getSelectedUnits();
+  
+  // Filter out excluded units
+  const units = allUnits.filter(unit => !excludedUnits.has(unit.id));
 
   if (!leadershipCap || leadershipCap <= 0) {
     return { error: "Set a leadership cap above zero.", rows: [], totals: null };
@@ -734,7 +761,7 @@ function updateResults() {
       const tierHeaderRow = document.createElement("tr");
       tierHeaderRow.className = `tier-header tier-${unitTier}`;
       tierHeaderRow.innerHTML = `
-        <td colspan="7" class="tier-header-cell">
+        <td colspan="9" class="tier-header-cell">
           <span class="tier-badge">Tier ${unitTier}</span>
         </td>
       `;
@@ -749,12 +776,16 @@ function updateResults() {
     tr.className = `tier-${unitTier}-row`;
     const unitKey = `${row.id}-${row.assignedUnits}`;
     const isChecked = checkedUnits.has(unitKey);
+    const isExcluded = excludedUnits.has(row.id);
     
     if (isChecked) {
       tr.classList.add('checked-row');
     }
     
     tr.innerHTML = `
+      <td class="include-cell">
+        <input type="checkbox" class="include-checkbox" data-unit-id="${row.id}" ${!isExcluded ? 'checked' : ''}>
+      </td>
       <td class="check-cell">
         <input type="checkbox" class="unit-checkbox" data-unit-key="${unitKey}" ${isChecked ? 'checked' : ''}>
       </td>
@@ -770,7 +801,22 @@ function updateResults() {
       <td>${row.notes}</td>
     `;
     
-    // Add click handler for checkbox
+    // Add click handler for include checkbox
+    const includeCheckbox = tr.querySelector('.include-checkbox');
+    includeCheckbox.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const unitId = includeCheckbox.dataset.unitId;
+      if (includeCheckbox.checked) {
+        excludedUnits.delete(unitId);
+      } else {
+        excludedUnits.add(unitId);
+      }
+      saveExcludedUnits(excludedUnits);
+      updateResults(); // Recalculate without the excluded unit
+      updateArmyProgress();
+    });
+    
+    // Add click handler for "added" checkbox
     const checkbox = tr.querySelector('.unit-checkbox');
     checkbox.addEventListener('change', (e) => {
       e.stopPropagation();
@@ -891,6 +937,23 @@ function loadCheckedMonsters() {
 function saveCheckedMonsters(set) {
   try {
     localStorage.setItem("checkedMonsters", JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+const excludedMonsters = loadExcludedMonsters();
+
+function loadExcludedMonsters() {
+  try {
+    const stored = localStorage.getItem("excludedMonsters");
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveExcludedMonsters(set) {
+  try {
+    localStorage.setItem("excludedMonsters", JSON.stringify(Array.from(set)));
   } catch {}
 }
 
@@ -1080,7 +1143,11 @@ function computeMonsterRecommendation() {
   const dominanceCap = Number(dominanceInput.value) || 0;
   const cushionPercent = Math.max(0, Number(monsterCushionInput.value) || 0);
   const cushionMultiplier = 1 + cushionPercent / 100;
-  const monsters = getSelectedMonsters();
+  const allMonsters = getSelectedMonsters();
+  
+  // Filter out excluded monsters
+  const monsters = allMonsters.filter(monster => !excludedMonsters.has(monster.id));
+  
   const mode = monsterModeSelect.value;
 
   if (!dominanceCap || dominanceCap <= 0) {
@@ -1317,7 +1384,7 @@ function updateMonsterResults() {
     // Tier header
     const headerRow = document.createElement("tr");
     headerRow.className = "tier-header";
-    headerRow.innerHTML = `<td colspan="8" class="tier-header-cell"><span class="tier-badge tier-${tier}">Tier ${tier}</span></td>`;
+    headerRow.innerHTML = `<td colspan="9" class="tier-header-cell"><span class="tier-badge tier-${tier}">Tier ${tier}</span></td>`;
     monsterResultTableBody.append(headerRow);
 
     // Monster rows
@@ -1325,12 +1392,16 @@ function updateMonsterResults() {
       const tr = document.createElement("tr");
       const monsterKey = row.id;
       const isChecked = checkedMonsters.has(monsterKey);
+      const isExcluded = excludedMonsters.has(row.id);
       
       if (isChecked) {
         tr.classList.add('checked-row');
       }
       
       tr.innerHTML = `
+        <td class="include-cell">
+          <input type="checkbox" class="include-checkbox" data-monster-id="${row.id}" ${!isExcluded ? 'checked' : ''}>
+        </td>
         <td class="check-cell">
           <input type="checkbox" class="monster-checkbox" data-monster-key="${monsterKey}" ${isChecked ? 'checked' : ''}>
         </td>
@@ -1346,7 +1417,22 @@ function updateMonsterResults() {
         <td>${row.notes}</td>
       `;
       
-      // Checkbox handler
+      // Include checkbox handler
+      const includeCheckbox = tr.querySelector('.include-checkbox');
+      includeCheckbox.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const monsterId = includeCheckbox.dataset.monsterId;
+        if (includeCheckbox.checked) {
+          excludedMonsters.delete(monsterId);
+        } else {
+          excludedMonsters.add(monsterId);
+        }
+        saveExcludedMonsters(excludedMonsters);
+        updateMonsterResults(); // Recalculate without the excluded monster
+        updateMonsterProgress();
+      });
+      
+      // "Added" checkbox handler
       const checkbox = tr.querySelector('.monster-checkbox');
       checkbox.addEventListener('change', (e) => {
         e.stopPropagation();
