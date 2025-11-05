@@ -121,6 +121,8 @@ const percentFormatter = new Intl.NumberFormat("en-US", { style: "percent", mini
 
 const leadershipInput = document.getElementById("leadership-input");
 const cushionInput = document.getElementById("cushion-input");
+const branchCushionInput = document.getElementById("branch-cushion-input");
+const roleCushionInput = document.getElementById("role-cushion-input");
 const targetHealthInput = document.getElementById("target-health-input");
 const branchControlsContainer = document.getElementById("branch-controls");
 const resultTableBody = document.querySelector("#result-table tbody");
@@ -143,6 +145,8 @@ const monsterProgressText = document.getElementById("monster-progress-text");
 const STORAGE_KEY = "stacking-calc-settings";
 const CHECKED_UNITS_KEY = "stacking-calc-checked-units";
 const EXCLUDED_UNITS_KEY = "stacking-calc-excluded-units";
+const ATTACK_ORDER_KEY = "stacking-calc-attack-order";
+const GAME_UI_ORDER_KEY = "stacking-calc-game-ui-order";
 
 // Load settings from localStorage
 function loadSettings() {
@@ -161,6 +165,8 @@ function saveSettings() {
     const settings = {
       leadership: leadershipInput.value,
       cushion: cushionInput.value,
+      branchCushion: branchCushionInput.value,
+      roleCushion: roleCushionInput.value,
       targetHealth: targetHealthInput.value,
       branches: {}
     };
@@ -219,11 +225,57 @@ function saveExcludedUnits(excludedUnits) {
   }
 }
 
+// Load attack order preference from localStorage
+function loadAttackOrderMode() {
+  try {
+    const saved = localStorage.getItem(ATTACK_ORDER_KEY);
+    return saved === "true"; // defaults to false if not set
+  } catch (e) {
+    console.warn("Failed to load attack order from localStorage:", e);
+    return false;
+  }
+}
+
+// Save attack order preference to localStorage
+function saveAttackOrderMode(enabled) {
+  try {
+    localStorage.setItem(ATTACK_ORDER_KEY, enabled.toString());
+  } catch (e) {
+    console.warn("Failed to save attack order to localStorage:", e);
+  }
+}
+
+// Load game UI order preference from localStorage
+function loadGameUIOrderMode() {
+  try {
+    const saved = localStorage.getItem(GAME_UI_ORDER_KEY);
+    return saved === "true"; // defaults to false if not set
+  } catch (e) {
+    console.warn("Failed to load game UI order from localStorage:", e);
+    return false;
+  }
+}
+
+// Save game UI order preference to localStorage
+function saveGameUIOrderMode(enabled) {
+  try {
+    localStorage.setItem(GAME_UI_ORDER_KEY, enabled.toString());
+  } catch (e) {
+    console.warn("Failed to save game UI order to localStorage:", e);
+  }
+}
+
 // Track which units have been added to army
 let checkedUnits = loadCheckedUnits();
 
 // Track which units are excluded from calculation
 let excludedUnits = loadExcludedUnits();
+
+// Track attack order mode (experimental feature)
+let useAttackOrderStacking = loadAttackOrderMode();
+
+// Track display order mode (game UI vs death order)
+let useGameUIOrder = loadGameUIOrderMode();
 
 // Track current results for army progress calculation
 let currentResults = [];
@@ -465,6 +517,8 @@ function renderBranchControls() {
   if (savedSettings) {
     if (savedSettings.leadership) leadershipInput.value = savedSettings.leadership;
     if (savedSettings.cushion) cushionInput.value = savedSettings.cushion;
+    if (savedSettings.branchCushion !== undefined) branchCushionInput.value = savedSettings.branchCushion;
+    if (savedSettings.roleCushion !== undefined) roleCushionInput.value = savedSettings.roleCushion;
     if (savedSettings.targetHealth) targetHealthInput.value = savedSettings.targetHealth;
   }
   
@@ -488,8 +542,15 @@ function getSelectedUnits() {
     return activeTierSet ? activeTierSet.has(unit.tier) : false;
   });
 
-  // Define role priority: flying > mounted > melee > ranged
-  const rolePriority = {
+  // Define role priority based on stacking mode
+  // Default mode: flying > mounted > melee > ranged (flying most protected)
+  // Attack order mode: melee > mounted > ranged > flying (melee tanks, gets attacked first)
+  const rolePriority = useAttackOrderStacking ? {
+    melee: 1,
+    mounted: 2,
+    ranged: 3,
+    flying: 4
+  } : {
     flying: 1,
     mounted: 2,
     melee: 3,
@@ -517,7 +578,8 @@ function getSelectedUnits() {
 function computeRecommendation() {
   const leadershipCap = Number(leadershipInput.value) || 0;
   const cushionPercent = Math.max(0, Number(cushionInput.value) || 0);
-  const cushionMultiplier = 1 + cushionPercent / 100;
+  const branchCushionPercent = Math.max(0, Number(branchCushionInput.value) || 0);
+  const roleCushionPercent = Math.max(0, Number(roleCushionInput.value) || 0);
   const targetHealth = Math.max(1000, Number(targetHealthInput.value) || 1000000);
   const allUnits = getSelectedUnits();
   
@@ -532,28 +594,54 @@ function computeRecommendation() {
     return { error: "Enable at least one troop branch and tier to build a hero stack.", rows: [], totals: null };
   }
 
-  // Group units by tier for proper health balancing
-  const tierGroups = new Map();
-  units.forEach(unit => {
-    if (!tierGroups.has(unit.tier)) {
-      tierGroups.set(unit.tier, []);
-    }
-    tierGroups.get(unit.tier).push(unit);
-  });
+  // Find min and max tiers to calculate tier-based health properly
+  const minTier = Math.min(...units.map(u => u.tier));
+  const maxTier = Math.max(...units.map(u => u.tier));
   
-  const tiers = Array.from(tierGroups.keys()).sort((a, b) => b - a);
-  const highestTier = tiers[0];
+  // Define branch indices for padding calculation (death order priority)
+  // Specialists die first, Guards die last
+  const branchIndices = {
+    "Specialists": 0,
+    "Guards": 1
+  };
+  
+  // Define role indices for padding calculation (death order priority)
+  const roleIndices = {
+    melee: 0,
+    mounted: 1,
+    ranged: 2,
+    flying: 3
+  };
   
   // Each unit type should get roughly equal health
-  // To achieve this, we give each unit a target health, then convert to units
-  // Apply cushion multiplier to lower tiers
+  // Apply ADDITIVE (non-cumulative) padding for tiers, branches, and roles
+  // IMPORTANT: HIGHER health = attacked FIRST = dies FIRST
   const enrichedUnits = units.map((unit) => {
-    const tierIndex = tiers.indexOf(unit.tier);
-    const cushionBoost = Math.pow(cushionMultiplier, tierIndex);
+    // Tier boost: LOWER tier numbers get MORE health (die first)
+    // Tier 5: tierIndex = 7-5 = 2 → gets MORE health (dies first)
+    // Tier 6: tierIndex = 7-6 = 1 → gets MORE health
+    // Tier 7 (maxTier): tierIndex = 7-7 = 0 → baseline (LOWEST health, most protected)
+    const tierIndex = maxTier - unit.tier;
+    const tierBoost = 1 + (cushionPercent / 100) * tierIndex;
     
-    // Each unit type gets an equal share of target health (before cushion)
-    // targetHealth is the baseline, cushionBoost increases it for lower tiers
-    const unitTargetHealth = targetHealth * cushionBoost;
+    // Branch boost: Specialists get MORE health than Guards (die first within tier)
+    // Specialists: branchIndex = 0 → gets MORE health (dies first)
+    // Guards: branchIndex = 1 → baseline (LOWER health, more protected)
+    const branchIndex = branchIndices[unit.branch] || 0;
+    const branchBoost = 1 + (branchCushionPercent / 100) * (1 - branchIndex);
+    
+    // Role boost: Melee gets MORE health (dies first within branch+tier)
+    // Melee: roleIndex = 0 → gets MOST health (dies first)
+    // Flying: roleIndex = 3 → baseline (LOWEST health, most protected)
+    const roleIndex = roleIndices[unit.role] || 0;
+    const reversedRoleIndex = 3 - roleIndex;
+    const roleBoost = 1 + (roleCushionPercent / 100) * reversedRoleIndex;
+    
+    // Combined boost: tier × branch × role padding
+    const combinedBoost = tierBoost * branchBoost * roleBoost;
+    
+    // Each unit type gets target health multiplied by combined boost
+    const unitTargetHealth = targetHealth * combinedBoost;
     
     // Convert target health to number of units
     const unitsNeeded = unitTargetHealth / unit.health;
@@ -564,6 +652,12 @@ function computeRecommendation() {
     return {
       unit,
       tierIndex,
+      branchIndex,
+      roleIndex,
+      tierBoost,
+      branchBoost,
+      roleBoost,
+      combinedBoost,
       relativeUnits: unitsNeeded,
       leadershipWeight,
       expectedUnits: 0,
@@ -760,15 +854,51 @@ function updateResults() {
   // Combine calculated rows with excluded unit rows
   const allRows = [...rows, ...excludedUnitRows];
   
-  // Sort all rows by tier (desc), then by branch priority, then by role
-  allRows.sort((a, b) => {
-    if (a.tier !== b.tier) return b.tier - a.tier;
-    const branchOrder = { "Guards": 1, "Specialists": 2 };
-    const branchDiff = (branchOrder[a.branch] || 3) - (branchOrder[b.branch] || 3);
-    if (branchDiff !== 0) return branchDiff;
-    const rolePriority = { "flying": 1, "mounted": 2, "melee": 3, "ranged": 4 };
-    return (rolePriority[a.role] || 999) - (rolePriority[b.role] || 999);
-  });
+  // Sort based on display mode
+  if (useGameUIOrder) {
+    // Game UI Order: Sort by leadership (desc), tier (desc), branch (Specialists first), role
+    const gameUIRolePriority = {
+      "melee": 1, "mounted": 2, "ranged": 3, "flying": 4
+    };
+    
+    allRows.sort((a, b) => {
+      // Find leadership for each unit
+      const aUnit = TROOPS.find(u => u.id === a.id);
+      const bUnit = TROOPS.find(u => u.id === b.id);
+      const aLeadership = aUnit ? aUnit.leadership : 0;
+      const bLeadership = bUnit ? bUnit.leadership : 0;
+      
+      // 1. Sort by leadership (descending - highest first)
+      if (bLeadership !== aLeadership) return bLeadership - aLeadership;
+      
+      // 2. Sort by tier (descending - highest tier first)
+      if (b.tier !== a.tier) return b.tier - a.tier;
+      
+      // 3. Sort by branch (Specialists before Guards)
+      const branchOrder = { "Specialists": 1, "Guards": 2 };
+      const branchDiff = (branchOrder[a.branch] || 3) - (branchOrder[b.branch] || 3);
+      if (branchDiff !== 0) return branchDiff;
+      
+      // 4. Sort by role
+      return (gameUIRolePriority[a.role] || 999) - (gameUIRolePriority[b.role] || 999);
+    });
+  } else {
+    // Death Order: Sort by tier (desc), then by branch priority, then by role
+    // Use the same role priority as getSelectedUnits
+    const displayRolePriority = useAttackOrderStacking ? {
+      "melee": 1, "mounted": 2, "ranged": 3, "flying": 4
+    } : {
+      "flying": 1, "mounted": 2, "melee": 3, "ranged": 4
+    };
+    
+    allRows.sort((a, b) => {
+      if (a.tier !== b.tier) return b.tier - a.tier;
+      const branchOrder = { "Guards": 1, "Specialists": 2 };
+      const branchDiff = (branchOrder[a.branch] || 3) - (branchOrder[b.branch] || 3);
+      if (branchDiff !== 0) return branchDiff;
+      return (displayRolePriority[a.role] || 999) - (displayRolePriority[b.role] || 999);
+    });
+  }
 
   if (!allRows.length) {
     summaryEl.innerHTML = "";
@@ -781,22 +911,46 @@ function updateResults() {
   warningEl.textContent = warning || "";
   warningEl.classList.toggle("hidden", !warning);
 
-  // Group rows by tier for visual organization
+  // Group rows by tier for visual organization (only in Death Order mode)
   let currentTier = null;
+  let currentLeadership = null;
+  
   allRows.forEach((row, index) => {
     const unitTier = row.tier;
     
-    // Add tier header when tier changes
-    if (currentTier !== unitTier) {
-      const tierHeaderRow = document.createElement("tr");
-      tierHeaderRow.className = `tier-header tier-${unitTier}`;
-      tierHeaderRow.innerHTML = `
-        <td colspan="9" class="tier-header-cell">
-          <span class="tier-badge">Tier ${unitTier}</span>
-        </td>
-      `;
-      resultTableBody.append(tierHeaderRow);
-      currentTier = unitTier;
+    if (useGameUIOrder) {
+      // In Game UI Order: Add leadership headers instead of tier headers
+      const unit = TROOPS.find(u => u.id === row.id);
+      const leadership = unit ? unit.leadership : 0;
+      
+      if (currentLeadership !== leadership) {
+        const leadershipHeaderRow = document.createElement("tr");
+        leadershipHeaderRow.className = `tier-header`;
+        const leadershipLabel = leadership === 20 ? "Flying (20 Leadership)" 
+                              : leadership === 2 ? "Mounted (2 Leadership)"
+                              : leadership === 1 ? "Infantry (1 Leadership)"
+                              : `${leadership} Leadership`;
+        leadershipHeaderRow.innerHTML = `
+          <td colspan="9" class="tier-header-cell">
+            <span class="tier-badge">${leadershipLabel}</span>
+          </td>
+        `;
+        resultTableBody.append(leadershipHeaderRow);
+        currentLeadership = leadership;
+      }
+    } else {
+      // In Death Order: Add tier headers when tier changes
+      if (currentTier !== unitTier) {
+        const tierHeaderRow = document.createElement("tr");
+        tierHeaderRow.className = `tier-header tier-${unitTier}`;
+        tierHeaderRow.innerHTML = `
+          <td colspan="9" class="tier-header-cell">
+            <span class="tier-badge">Tier ${unitTier}</span>
+          </td>
+        `;
+        resultTableBody.append(tierHeaderRow);
+        currentTier = unitTier;
+      }
     }
     
     // Extract base unit ID (remove role suffix like -F, -M, -R, -ML)
@@ -821,7 +975,7 @@ function updateResults() {
       <td class="check-cell">
         <input type="checkbox" class="unit-checkbox" data-unit-key="${unitKey}" ${isChecked ? 'checked' : ''}>
       </td>
-      <td><strong>${baseId}</strong></td>
+      <td class="unit-id-cell"><span class="unit-id tier-${row.tier}-id">${baseId}</span></td>
       <td><span class="role-badge role-${row.role}">${row.role}</span></td>
       <td class="units-cell">
         <span class="units-value">${formatNumber(row.assignedUnits)}</span>
@@ -904,12 +1058,22 @@ function updateResults() {
       ? `${formatLeadership(Math.abs(totals.leftover))} over cap`
       : "uses full leadership";
 
+  const branchCushionPercent = Math.max(0, Number(branchCushionInput.value) || 0);
+  const roleCushionPercent = Math.max(0, Number(roleCushionInput.value) || 0);
+  
+  const branchInfo = branchCushionPercent > 0 
+    ? ` Branch padding: <strong>${branchCushionPercent}%</strong>.`
+    : '';
+  const roleInfo = roleCushionPercent > 0 
+    ? ` Role padding: <strong>${roleCushionPercent}%</strong>.`
+    : '';
+  
   summaryEl.innerHTML = `
     Hero deploys <strong>${formatLeadership(totals.usedLeadership)}</strong> of
     <strong>${formatLeadership(totals.leadershipCap)}</strong> —
     ${leftoverLabel}. Total stack health:
-    <strong>${formatNumber(totals.totalHealth)}</strong>. Lower-tier padding:
-    <strong>${totals.cushionPercent}%</strong>.
+    <strong>${formatNumber(totals.totalHealth)}</strong>. Tier padding:
+    <strong>${totals.cushionPercent}%</strong>.${branchInfo}${roleInfo}
   `;
   
   // Update army progress bar
@@ -930,10 +1094,40 @@ function initEvents() {
     updateResults();
     saveSettings();
   });
+  branchCushionInput.addEventListener("input", () => {
+    updateResults();
+    saveSettings();
+  });
+  roleCushionInput.addEventListener("input", () => {
+    updateResults();
+    saveSettings();
+  });
   targetHealthInput.addEventListener("input", () => {
     updateResults();
     saveSettings();
   });
+  
+  // Attack order stacking toggle
+  const attackOrderCheckbox = document.getElementById("attack-order-stacking");
+  if (attackOrderCheckbox) {
+    attackOrderCheckbox.checked = useAttackOrderStacking;
+    attackOrderCheckbox.addEventListener("change", () => {
+      useAttackOrderStacking = attackOrderCheckbox.checked;
+      saveAttackOrderMode(useAttackOrderStacking);
+      updateResults();
+    });
+  }
+  
+  // Game UI order toggle
+  const gameUIOrderCheckbox = document.getElementById("game-ui-order");
+  if (gameUIOrderCheckbox) {
+    gameUIOrderCheckbox.checked = useGameUIOrder;
+    gameUIOrderCheckbox.addEventListener("change", () => {
+      useGameUIOrder = gameUIOrderCheckbox.checked;
+      saveGameUIOrderMode(useGameUIOrder);
+      updateResults();
+    });
+  }
   
   // Clear checked units button
   const clearCheckedBtn = document.getElementById("clear-checked-btn");
